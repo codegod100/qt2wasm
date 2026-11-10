@@ -1,0 +1,22 @@
+# A minimal Qt-for-WASI program built against the published packages:
+#   pixi run example     # build, then run it; writes qt6-wasi-example.png
+[workspace]
+name = "qt6-wasi-example"
+channels = ["conda-forge", "https://prefix.dev/nandi-testing"]
+platforms = ["linux-64"]
+
+[dependencies]
+qt6-wasi = { version = "6.8.3.*", channel = "https://prefix.dev/nandi-testing" }  # + wasi-sdk, cmake, ninja
+python = ">=3.10"
+wasmtime-py = ">=40"
+
+[tasks.build]
+description = "Configure with the WASI Qt's qt-cmake and build build/qt6-wasi-example.wasm"
+cmd = "$QT_WASI_PREFIX/bin/qt-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build"
+inputs = ["main.cpp", "CMakeLists.txt"]
+outputs = ["build/qt6-wasi-example.wasm"]
+
+[tasks.example]
+description = "Run the example under wasmtime: prints a preview, writes qt6-wasi-example.png"
+cmd = "python run.py build/qt6-wasi-example.wasm qt6-wasi-example.png"
+depends-on = ["build"]

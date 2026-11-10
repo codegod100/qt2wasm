@@ -15,6 +15,22 @@ so it happens once here, in CI, instead of on every machine.
 
 `wac-cli` 0.12.0 comes from the same channel (built by nandi.uk/qtdev). All linux-64.
 
+## Example
+
+[`example/`](example/) is a small QtGui program (QPainter gradients and paths into a
+`QImage`, saved as PNG, with a truecolor preview printed to the terminal), built
+against the published packages:
+
+```sh
+cd example
+pixi run example    # installs qt6-wasi from nandi-testing, builds, runs under wasmtime
+```
+
+It is a plain WASI command (`main`), so raster painting needs no `QGuiApplication`
+or QPA plugin. `run.py` runs it with wasmtime-py and the current dir preopened,
+since conda-forge has no wasmtime CLI. The `example` forge job builds and runs it
+on every push.
+
 ## Use
 
 ```toml

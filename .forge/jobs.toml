@@ -8,3 +8,11 @@ name = "publish"
 branches = ["main"]
 timeout = 3600
 run = "python3 ci/publish.py"
+
+# On every push to main: build and run example/ against the published packages
+# (a clean install from example/pixi.lock). See ci/example.sh.
+[[job]]
+name = "example"
+branches = ["main"]
+timeout = 1800
+run = "bash ci/example.sh"
