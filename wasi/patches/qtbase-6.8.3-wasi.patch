@@ -1,0 +1,131 @@
+diff --git a/src/3rdparty/freetype/src/smooth/ftgrays.c b/src/3rdparty/freetype/src/smooth/ftgrays.c
+index b7c0632a..a797d361 100644
+--- a/src/3rdparty/freetype/src/smooth/ftgrays.c
++++ b/src/3rdparty/freetype/src/smooth/ftgrays.c
+@@ -511,6 +511,11 @@ typedef ptrdiff_t  FT_PtrDist;
+     void*                render_span_data;
+ 
+     ft_jmp_buf  jump_buffer;
++#ifdef __wasi__
++    /* wasm32-wasi has no setjmp/longjmp: flag the overflow instead. */
++    int    overflow;
++    TCell  scratch_cell;
++#endif
+ 
+   } gray_TWorker, *gray_PWorker;
+ 
+@@ -615,7 +620,21 @@ typedef ptrdiff_t  FT_PtrDist;
+       /* insert new cell */
+       cell = ras.cell_free++;
+       if ( cell >= ras.cell_null )
++      {
++#ifdef __wasi__
++        ras.cell_free--;
++        ras.overflow = 1;
++        cell         = &ras.scratch_cell;
++        cell->x      = ex;
++        cell->area   = 0;
++        cell->cover  = 0;
++        cell->next   = ras.cell_null;
++        ras.cell     = cell;
++        return;
++#else
+         ft_longjmp( ras.jump_buffer, 1 );
++#endif
++      }
+ 
+       cell->x     = ex;
+       cell->area  = 0;
+@@ -1703,6 +1722,13 @@ typedef ptrdiff_t  FT_PtrDist;
+     volatile int  error;
+ 
+ 
++#ifdef __wasi__
++    ras.overflow = 0;
++    error = FT_Outline_Decompose( &ras.outline, &func_interface, &ras );
++    if ( ras.overflow )
++      error = FT_THROW( Raster_Overflow );
++    return error;
++#endif
+     if ( ft_setjmp( ras.jump_buffer ) == 0 )
+     {
+       if ( continued )
+diff --git a/src/corelib/global/qsystemdetection.h b/src/corelib/global/qsystemdetection.h
+index 0cbcef27..aa3e8c29 100644
+--- a/src/corelib/global/qsystemdetection.h
++++ b/src/corelib/global/qsystemdetection.h
+@@ -96,6 +96,8 @@
+ #  define Q_OS_HPUX
+ #elif defined(__EMSCRIPTEN__)
+ #  define Q_OS_WASM
++#elif defined(__wasi__)
++#  define Q_OS_WASI
+ #elif defined(__linux__) || defined(__linux)
+ #  define Q_OS_LINUX
+ #elif defined(__FreeBSD__) || defined(__DragonFly__) || defined(__FreeBSD_kernel__)
+diff --git a/src/corelib/kernel/qeventdispatcher_unix.cpp b/src/corelib/kernel/qeventdispatcher_unix.cpp
+index 1b7a6537..a4132bfc 100644
+--- a/src/corelib/kernel/qeventdispatcher_unix.cpp
++++ b/src/corelib/kernel/qeventdispatcher_unix.cpp
+@@ -86,7 +86,7 @@ static void initThreadPipeFD(int fd)
+ 
+ bool QThreadPipe::init()
+ {
+-#if defined(Q_OS_WASM)
++#if defined(Q_OS_WASM) || defined(Q_OS_WASI)
+     // do nothing.
+ #elif defined(Q_OS_VXWORKS)
+     std::snprintf(name, sizeof(name), "/pipe/qt_%08x", int(taskIdSelf()));
+diff --git a/src/gui/painting/qgrayraster.c b/src/gui/painting/qgrayraster.c
+index 8436ba15..224deadc 100644
+--- a/src/gui/painting/qgrayraster.c
++++ b/src/gui/painting/qgrayraster.c
+@@ -276,6 +276,12 @@ QT_FT_END_STMNT
+     int  band_shoot;
+ 
+     qt_ft_jmp_buf  jump_buffer;
++#ifdef __wasi__
++    /* No setjmp/longjmp on wasm32-wasi: flag the overflow, park writes in
++       a scratch cell and let gray_convert_glyph_inner report it. */
++    int    overflow;
++    TCell  scratch_cell;
++#endif
+ 
+     void*       buffer;
+     long        buffer_size;
+@@ -398,7 +404,19 @@ QT_FT_END_STMNT
+     }
+ 
+     if ( ras.num_cells >= ras.max_cells )
++    {
++#ifdef __wasi__
++      ras.overflow = 1;
++      cell        = &ras.scratch_cell;
++      cell->x     = x;
++      cell->area  = 0;
++      cell->cover = 0;
++      cell->next  = NULL;
++      return cell;
++#else
+       qt_ft_longjmp( ras.jump_buffer, 1 );
++#endif
++    }
+ 
+     cell        = ras.cells + ras.num_cells++;
+     cell->x     = x;
+@@ -1627,6 +1645,15 @@ QT_FT_END_STMNT
+   {
+     volatile int  error = 0;
+ 
++#ifdef __wasi__
++    ras.overflow = 0;
++    error = QT_FT_Outline_Decompose( &ras.outline, &ras );
++    if ( !ras.overflow && !ras.invalid )
++      gray_record_cell( RAS_VAR );
++    if ( ras.overflow )
++      error = ErrRaster_Memory_Overflow;
++    return error;
++#endif
+     if ( qt_ft_setjmp( ras.jump_buffer ) == 0 )
+     {
+       error = QT_FT_Outline_Decompose( &ras.outline, &ras );
