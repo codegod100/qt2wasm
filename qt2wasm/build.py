@@ -124,18 +124,23 @@ def find_tools(args) -> Tools:
         ),
         "QT2WASM_MOC; any Qt 6 moc with output revision 68 works",
     )
+    qt_tools = qtdir / ".build" / "tools" / "bin"  # `just wasm-qt-setup` installs here
     wit_bindgen = need(
         "wit-bindgen",
-        _which("wit-bindgen", "QT2WASM_WIT_BINDGEN"),
-        "QT2WASM_WIT_BINDGEN; 0.46 tested",
+        _which("wit-bindgen", "QT2WASM_WIT_BINDGEN", qt_tools / "wit-bindgen"),
+        "QT2WASM_WIT_BINDGEN or `just wasm-qt-setup`; 0.46 tested",
     )
     wasm_tools = need(
         "wasm-tools",
-        _which("wasm-tools", "QT2WASM_WASM_TOOLS"),
-        "QT2WASM_WASM_TOOLS; 1.239 tested",
+        _which("wasm-tools", "QT2WASM_WASM_TOOLS", qt_tools / "wasm-tools"),
+        "QT2WASM_WASM_TOOLS or `just wasm-qt-setup`; 1.239 tested",
     )
     wasm_opt = _which("wasm-opt", "QT2WASM_WASM_OPT")
-    adapter = _which("wasi_snapshot_preview1.reactor.wasm", "QT2WASM_ADAPTER")
+    adapter = _which(
+        "wasi_snapshot_preview1.reactor.wasm",
+        "QT2WASM_ADAPTER",
+        qtdir / ".build" / "adapter.wasm",  # wasmtime 36's reactor adapter, from build.sh setup
+    )
     if adapter is None and qtdir.exists():
         found = sorted(qtdir.glob("**/wasi_snapshot_preview1.reactor*.wasm"))
         adapter = found[0] if found else None

@@ -25,22 +25,28 @@ for"). It is built by the `qt2wasm-conda` job in `.forge/jobs.toml` on Depot
 with pixi-build and published when the version in `pixi.toml` and
 `pyproject.toml` is new.
 
-## Quick start
+## Quick start: the examples
+
+From a ditherterm checkout, with [pixi](https://pixi.sh) and `just` on PATH
+(the `wasm` pixi env brings Python, wasmtime-py, cmake, ninja and Rust):
 
 ```sh
-pip install -e tools/qt2wasm          # or: PYTHONPATH=tools/qt2wasm
-python -m qt2wasm build tools/qt2wasm/examples/counter -o counter.wasm
-python tools/qt2wasm/tests/run_counter.py counter.wasm
+just qt2wasm-setup      # once, ~30 min: wasi-sdk 27, adapter, wit-bindgen,
+                        # wasm-tools, host moc, static Qt 6.8.3 for WASI
+just qt2wasm-examples   # build tools/qt2wasm/build/counter.wasm and canvas.wasm
+just qt2wasm-run        # run both under wasmtime; writes build/canvas.png
+just qt2wasm-test       # codegen tests + the built components
 ```
 
-For a QtGui project, pass the fonts to compile in (subset to Latin plus the
-block and braille characters by default):
+`qt2wasm-setup` is `just wasm-qt-setup`, `wasm-qt-host` and `wasm-qt-build`,
+skipping what is already built. The canvas example compiles in a font: it uses
+DejaVu Sans from the pixi env or the system, or `QT2WASM_FONT=/path/to.ttf`.
+`wasm-opt` (binaryen) is optional; put it on PATH for the smaller sizes below.
 
-```sh
-python -m qt2wasm build tools/qt2wasm/examples/canvas \
-    --font /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf -o canvas.wasm
-python tools/qt2wasm/tests/run_canvas.py canvas.wasm canvas.png
-```
+Your own project: `just qt2wasm build path/to/project -o app.wasm` (add
+`--font some.ttf` for QtGui). Without just, run `python -m qt2wasm build ...`
+with `PYTHONPATH=tools/qt2wasm`; it finds wasi-sdk, Qt, moc, wit-bindgen,
+wasm-tools and the adapter under `wasm/qt/.build` (see "Tools it looks for").
 
 ## Writing a component (Qt-first)
 
@@ -122,11 +128,11 @@ one.
 | wasi-sdk | `--wasi-sdk`, `WASI_SDK_PREFIX`, `wasm/qt/.build/wasi-sdk` | 27.0 |
 | Qt for WASI prefix | `--qt-prefix`, `QT2WASM_QT_PREFIX`, `wasm/qt/.build/wasi` | 6.8.3 |
 | Qt WASI toolchain file | `--qt-toolchain`, `QT2WASM_QT_TOOLCHAIN`, `wasm/qt/cmake/wasi-qt.cmake` | |
-| host moc | `QT2WASM_MOC`, `PATH`, `/usr/lib/qt6/libexec/moc` | 6.4 and 6.8 (output revision 68) |
-| wit-bindgen | `QT2WASM_WIT_BINDGEN`, `PATH` | 0.46.0 |
-| wasm-tools | `QT2WASM_WASM_TOOLS`, `PATH` | 1.239.0 |
+| host moc | `QT2WASM_MOC`, `PATH`, `/usr/lib/qt6/libexec/moc`, `wasm/qt/.build/host/libexec/moc` | 6.4 and 6.8 (output revision 68) |
+| wit-bindgen | `QT2WASM_WIT_BINDGEN`, `PATH`, `wasm/qt/.build/tools/bin` | 0.46.0 |
+| wasm-tools | `QT2WASM_WASM_TOOLS`, `PATH`, `wasm/qt/.build/tools/bin` | 1.239.0 |
 | wasm-opt (optional) | `QT2WASM_WASM_OPT`, `PATH` | binaryen 119 |
-| preview1 reactor adapter | `QT2WASM_ADAPTER`, `wasm/qt/` | wasmtime 36 |
+| preview1 reactor adapter | `QT2WASM_ADAPTER`, `wasm/qt/.build/adapter.wasm` | wasmtime 36 |
 | fontTools (optional, subsetting) | Python | 4.x |
 
 ## Measured (2026-11-09)
@@ -136,8 +142,7 @@ one.
 | counter (QtCore only) | 4.83 MB | 2.31 MB | 2.36 MB |
 | canvas (QtGui, QPainter, DejaVu Sans subset 45 KB) | 9.06 MB | 6.45 MB | 6.50 MB |
 
-Both run under wasmtime-py: `pytest tools/qt2wasm/tests` with
-`QT2WASM_TEST_COUNTER` / `QT2WASM_TEST_CANVAS` pointing at the builds.
+Both run under wasmtime-py (`just qt2wasm-run`, `just qt2wasm-test`).
 
 ## Not done yet
 
