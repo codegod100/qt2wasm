@@ -1,0 +1,1510 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+      
+        <link rel="prev" href="./index.html">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="./assets/images/favicon.png">
+      <meta name="generator" content="zensical-0.1.0">
+    
+    
+      
+        <title>demo:counter@0.1.0 - demo:counter@0.1.0</title>
+      
+    
+    
+      
+        
+      
+      <link rel="stylesheet" href="./assets/stylesheets/modern/main.4ab2de0c.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,500,500i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL(".",location),__md_scope.pathname.endsWith("/")||(__md_scope=new URL(__md_scope.pathname+"/",location)),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,_=__md_scope)=>JSON.parse(t.getItem(_.pathname+"."+e)),__md_set=(e,t,_=localStorage,a=__md_scope)=>{try{_.setItem(a.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer" aria-hidden="true"></label>
+    <div data-md-component="skip">
+      <a href="#__skip" class="md-skip">
+        Skip to content
+      </a>
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="./index.html" title="demo:counter@0.1.0" class="md-header__button md-logo" aria-label="demo:counter@0.1.0" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 5v16M20.001 19A2 2 0 0 0 22 17V5a2 2 0 0 0-1.999-2L16 3.002A5 5 0 0 0 12 5a5 5 0 0 0-4-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 1.999 2H8a5 5 0 0 1 4 2 5 5 0 0 1 4-2z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-menu" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+      <span class="md-visually-hidden">Navigation</span>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            demo:counter@0.1.0
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              demo:counter@0.1.0
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+          <span class="md-visually-hidden">Search</span>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <button type="button" class="md-search__button">
+    Search
+  </button>
+</div>
+      
+    
+    <div class="md-header__source">
+      
+    </div>
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="./index.html" title="demo:counter@0.1.0" class="md-nav__button md-logo" aria-label="demo:counter@0.1.0" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 5v16M20.001 19A2 2 0 0 0 22 17V5a2 2 0 0 0-1.999-2L16 3.002A5 5 0 0 0 12 5a5 5 0 0 0-4-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 1.999 2H8a5 5 0 0 1 4 2 5 5 0 0 1 4-2z"/></svg>
+
+    </a>
+    demo:counter@0.1.0
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="./index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Overview
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  demo:counter@0.1.0
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="counter.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  demo:counter@0.1.0
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#import-interface-democountercounter-events010" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a>Import interface demo:counter/counter-events@0.1.0
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Import interface demo:counter&#x2f;counter-events@0.1.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Functions
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#value-changed-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>value-changed: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="value-changed: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#overflowed-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>overflowed: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="overflowed: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#import-interface-democountertypes010" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a>Import interface demo:counter/types@0.1.0
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Import interface demo:counter&#x2f;types@0.1.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#types" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Types
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enum-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>enum mode</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="enum mode">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enum-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Enum Cases
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#export-interface-democountercounter010" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a>Export interface demo:counter/counter@0.1.0
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Export interface demo:counter&#x2f;counter@0.1.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#types_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Types
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#type-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type mode</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resource-counter" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>resource counter</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#functions_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Functions
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constructorcounter-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[constructor]counter: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[constructor]counter: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#return-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcounterid-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]counter.id: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]counter.id: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcountervalue-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]counter.value: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]counter.value: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcounterset-value-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]counter.set-value: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]counter.set-value: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcounterdescribe-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]counter.describe: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]counter.describe: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcounterhistory-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]counter.history: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]counter.history: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcounterset-mode-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]counter.set-mode: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]counter.set-mode: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcounterstep-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]counter.step: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]counter.step: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  
+                    
+                    
+                    
+                      
+                    
+                    
+                      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+                      <div class="md-sidebar-button__wrapper">
+                        <label class="md-sidebar-button" for="__toc"></label>
+                      </div>
+                    
+                  
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#import-interface-democountercounter-events010" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a>Import interface demo:counter/counter-events@0.1.0
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Import interface demo:counter&#x2f;counter-events@0.1.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Functions
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#value-changed-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>value-changed: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="value-changed: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#overflowed-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>overflowed: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="overflowed: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#import-interface-democountertypes010" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a>Import interface demo:counter/types@0.1.0
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Import interface demo:counter&#x2f;types@0.1.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#types" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Types
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enum-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>enum mode</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="enum mode">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enum-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Enum Cases
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#export-interface-democountercounter010" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a>Export interface demo:counter/counter@0.1.0
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Export interface demo:counter&#x2f;counter@0.1.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#types_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Types
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#type-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type mode</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resource-counter" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>resource counter</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#functions_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Functions
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constructorcounter-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[constructor]counter: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[constructor]counter: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#return-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcounterid-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]counter.id: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]counter.id: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcountervalue-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]counter.value: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]counter.value: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcounterset-value-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]counter.set-value: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]counter.set-value: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcounterdescribe-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]counter.describe: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]counter.describe: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcounterhistory-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]counter.history: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]counter.history: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcounterset-mode-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]counter.set-mode: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]counter.set-mode: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcounterstep-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]counter.step: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]counter.step: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                <a id="__skip" tabindex="-1"></a>
+                
+                  
+
+
+<h1 id="world-component"><a id="component"></a>World component<a class="headerlink" href="#world-component" title="Permanent link">&para;</a></h1>
+<ul>
+<li>Imports:<ul>
+<li>interface <code>demo:counter/counter-events@0.1.0</code></li>
+<li>interface <code>demo:counter/types@0.1.0</code></li>
+</ul>
+</li>
+<li>Exports:<ul>
+<li>interface <code>demo:counter/counter@0.1.0</code></li>
+</ul>
+</li>
+</ul>
+<h2 id="import-interface-democountercounter-events010"><a id="demo_counter_counter_events_0_1_0"></a>Import interface demo:counter/counter-events@0.1.0<a class="headerlink" href="#import-interface-democountercounter-events010" title="Permanent link">&para;</a></h2>
+<p>Signals of Counter, delivered to the host as calls.</p>
+<hr />
+<h3 id="functions">Functions<a class="headerlink" href="#functions" title="Permanent link">&para;</a></h3>
+<h4 id="value-changed-func"><a id="value_changed"></a><code>value-changed: func</code><a class="headerlink" href="#value-changed-func" title="Permanent link">&para;</a></h4>
+<p>Emitted when the count changes to <code>value</code>.</p>
+<h5 id="params">Params<a class="headerlink" href="#params" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="value_changed.source"></a><code>source</code>: <code>u32</code></li>
+<li><a id="value_changed.value"></a><code>value</code>: <code>s32</code></li>
+</ul>
+<h4 id="overflowed-func"><a id="overflowed"></a><code>overflowed: func</code><a class="headerlink" href="#overflowed-func" title="Permanent link">&para;</a></h4>
+<p>Emitted instead of stepping past <code>INT_MAX</code>: <code>why</code> says why and <code>at</code> is
+the value the step would have reached.</p>
+<h5 id="params_1">Params<a class="headerlink" href="#params_1" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="overflowed.source"></a><code>source</code>: <code>u32</code></li>
+<li><a id="overflowed.why"></a><code>why</code>: <code>string</code></li>
+<li><a id="overflowed.at"></a><code>at</code>: <code>s64</code></li>
+</ul>
+<h2 id="import-interface-democountertypes010"><a id="demo_counter_types_0_1_0"></a>Import interface demo:counter/types@0.1.0<a class="headerlink" href="#import-interface-democountertypes010" title="Permanent link">&para;</a></h2>
+<p>Qt value types, records from Q_GADGETs, and Q_ENUM/Q_FLAG enums.</p>
+<hr />
+<h3 id="types">Types<a class="headerlink" href="#types" title="Permanent link">&para;</a></h3>
+<h4 id="enum-mode"><a id="mode"></a><code>enum mode</code><a class="headerlink" href="#enum-mode" title="Permanent link">&para;</a></h4>
+<p>How <code>step</code> advances the value.</p>
+<p>Q_ENUM Counter::Mode.</p>
+<h5 id="enum-cases">Enum Cases<a class="headerlink" href="#enum-cases" title="Permanent link">&para;</a></h5>
+<ul>
+<li>
+<p><a id="mode.linear"></a><code>linear</code></p>
+<p>Add one.</p>
+</li>
+<li>
+<p><a id="mode.doubling"></a><code>doubling</code></p>
+<p>Double the value (zero becomes one).</p>
+</li>
+</ul>
+<h2 id="export-interface-democountercounter010"><a id="demo_counter_counter_0_1_0"></a>Export interface demo:counter/counter@0.1.0<a class="headerlink" href="#export-interface-democountercounter010" title="Permanent link">&para;</a></h2>
+<hr />
+<h3 id="types_1">Types<a class="headerlink" href="#types_1" title="Permanent link">&para;</a></h3>
+<h4 id="type-mode"><a id="mode"></a><code>type mode</code><a class="headerlink" href="#type-mode" title="Permanent link">&para;</a></h4>
+<p><a href="#mode"><code>mode</code></a></p>
+<h4 id="resource-counter"><a id="counter"></a><code>resource counter</code><a class="headerlink" href="#resource-counter" title="Permanent link">&para;</a></h4>
+<p>A counter that steps by one or doubles.</p>
+<p>The doc comments in this file are qdoc's. qt2wasm runs qdoc over the
+project and writes them into the generated WIT as <code>///</code> docs.</p>
+<hr />
+<h3 id="functions_1">Functions<a class="headerlink" href="#functions_1" title="Permanent link">&para;</a></h3>
+<h4 id="constructorcounter-func"><a id="constructor_counter"></a><code>[constructor]counter: func</code><a class="headerlink" href="#constructorcounter-func" title="Permanent link">&para;</a></h4>
+<p>Creates a counter at zero in Linear mode.</p>
+<h5 id="return-values">Return values<a class="headerlink" href="#return-values" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="constructor_counter.0"></a> own&lt;<a href="#counter"><code>counter</code></a>&gt;</li>
+</ul>
+<h4 id="methodcounterid-func"><a id="method_counter_id"></a><code>[method]counter.id: func</code><a class="headerlink" href="#methodcounterid-func" title="Permanent link">&para;</a></h4>
+<p>Instance id; signals from this instance carry it as <code>source</code>.</p>
+<h5 id="params_2">Params<a class="headerlink" href="#params_2" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_counter_id.self"></a><code>self</code>: borrow&lt;<a href="#counter"><code>counter</code></a>&gt;</li>
+</ul>
+<h5 id="return-values_1">Return values<a class="headerlink" href="#return-values_1" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_counter_id.0"></a> <code>u32</code></li>
+</ul>
+<h4 id="methodcountervalue-func"><a id="method_counter_value"></a><code>[method]counter.value: func</code><a class="headerlink" href="#methodcountervalue-func" title="Permanent link">&para;</a></h4>
+<p>This property holds the current count.</p>
+<p>Setting it records the new value in <code>history</code> and emits
+<code>value-changed</code>.</p>
+<p>Q_PROPERTY read: Counter::value</p>
+<h5 id="params_3">Params<a class="headerlink" href="#params_3" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_counter_value.self"></a><code>self</code>: borrow&lt;<a href="#counter"><code>counter</code></a>&gt;</li>
+</ul>
+<h5 id="return-values_2">Return values<a class="headerlink" href="#return-values_2" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_counter_value.0"></a> <code>s32</code></li>
+</ul>
+<h4 id="methodcounterset-value-func"><a id="method_counter_set_value"></a><code>[method]counter.set-value: func</code><a class="headerlink" href="#methodcounterset-value-func" title="Permanent link">&para;</a></h4>
+<p>Sets <code>value</code>.</p>
+<p>This property holds the current count.</p>
+<p>Setting it records the new value in <code>history</code> and emits
+<code>value-changed</code>.</p>
+<p>Q_PROPERTY write: Counter::setValue</p>
+<h5 id="params_4">Params<a class="headerlink" href="#params_4" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_counter_set_value.self"></a><code>self</code>: borrow&lt;<a href="#counter"><code>counter</code></a>&gt;</li>
+<li><a id="method_counter_set_value.value"></a><code>value</code>: <code>s32</code></li>
+</ul>
+<h4 id="methodcounterdescribe-func"><a id="method_counter_describe"></a><code>[method]counter.describe: func</code><a class="headerlink" href="#methodcounterdescribe-func" title="Permanent link">&para;</a></h4>
+<p>Returns <code>prefix</code> followed by the value and the mode, for example
+<code>"n=3 (linear)"</code>.</p>
+<h5 id="params_5">Params<a class="headerlink" href="#params_5" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_counter_describe.self"></a><code>self</code>: borrow&lt;<a href="#counter"><code>counter</code></a>&gt;</li>
+<li><a id="method_counter_describe.prefix"></a><code>prefix</code>: <code>string</code></li>
+</ul>
+<h5 id="return-values_3">Return values<a class="headerlink" href="#return-values_3" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_counter_describe.0"></a> <code>string</code></li>
+</ul>
+<h4 id="methodcounterhistory-func"><a id="method_counter_history"></a><code>[method]counter.history: func</code><a class="headerlink" href="#methodcounterhistory-func" title="Permanent link">&para;</a></h4>
+<p>Returns the last <code>n</code> values the counter held, oldest first.</p>
+<h5 id="params_6">Params<a class="headerlink" href="#params_6" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_counter_history.self"></a><code>self</code>: borrow&lt;<a href="#counter"><code>counter</code></a>&gt;</li>
+<li><a id="method_counter_history.n"></a><code>n</code>: <code>s32</code></li>
+</ul>
+<h5 id="return-values_4">Return values<a class="headerlink" href="#return-values_4" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_counter_history.0"></a> list&lt;<code>f64</code>&gt;</li>
+</ul>
+<h4 id="methodcounterset-mode-func"><a id="method_counter_set_mode"></a><code>[method]counter.set-mode: func</code><a class="headerlink" href="#methodcounterset-mode-func" title="Permanent link">&para;</a></h4>
+<p>Switches to mode <code>m</code> for the next <code>step</code>.</p>
+<h5 id="params_7">Params<a class="headerlink" href="#params_7" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_counter_set_mode.self"></a><code>self</code>: borrow&lt;<a href="#counter"><code>counter</code></a>&gt;</li>
+<li><a id="method_counter_set_mode.m"></a><code>m</code>: <a href="#mode"><code>mode</code></a></li>
+</ul>
+<h4 id="methodcounterstep-func"><a id="method_counter_step"></a><code>[method]counter.step: func</code><a class="headerlink" href="#methodcounterstep-func" title="Permanent link">&para;</a></h4>
+<p>Advances the counter once, by the current Mode.</p>
+<p>See also: <code>set-mode</code>, <code>overflowed</code>.</p>
+<h5 id="params_8">Params<a class="headerlink" href="#params_8" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_counter_step.self"></a><code>self</code>: borrow&lt;<a href="#counter"><code>counter</code></a>&gt;</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://zensical.org/" target="_blank" rel="noopener">
+      Zensical
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog" role="status" aria-atomic="true">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      
+      
+        
+        
+      <script id="__config" type="application/json">{"annotate":null,"base":".","features":[],"redirect":null,"search":"./assets/javascripts/workers/search.719e0d91.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","clipboard.error":"Could not copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
+    
+    
+      <script src="./assets/javascripts/bundle.d31f0ffa.min.js"></script>
+      
+    
+  </body>
+</html>

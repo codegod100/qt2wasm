@@ -1,0 +1,2242 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+      
+        <link rel="prev" href="./index.html">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="./assets/images/favicon.png">
+      <meta name="generator" content="zensical-0.1.0">
+    
+    
+      
+        <title>demo:canvas@0.1.0 - demo:canvas@0.1.0</title>
+      
+    
+    
+      
+        
+      
+      <link rel="stylesheet" href="./assets/stylesheets/modern/main.4ab2de0c.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,500,500i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL(".",location),__md_scope.pathname.endsWith("/")||(__md_scope=new URL(__md_scope.pathname+"/",location)),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,_=__md_scope)=>JSON.parse(t.getItem(_.pathname+"."+e)),__md_set=(e,t,_=localStorage,a=__md_scope)=>{try{_.setItem(a.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer" aria-hidden="true"></label>
+    <div data-md-component="skip">
+      <a href="#__skip" class="md-skip">
+        Skip to content
+      </a>
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="./index.html" title="demo:canvas@0.1.0" class="md-header__button md-logo" aria-label="demo:canvas@0.1.0" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 5v16M20.001 19A2 2 0 0 0 22 17V5a2 2 0 0 0-1.999-2L16 3.002A5 5 0 0 0 12 5a5 5 0 0 0-4-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 1.999 2H8a5 5 0 0 1 4 2 5 5 0 0 1 4-2z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-menu" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+      <span class="md-visually-hidden">Navigation</span>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            demo:canvas@0.1.0
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              demo:canvas@0.1.0
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+          <span class="md-visually-hidden">Search</span>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <button type="button" class="md-search__button">
+    Search
+  </button>
+</div>
+      
+    
+    <div class="md-header__source">
+      
+    </div>
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="./index.html" title="demo:canvas@0.1.0" class="md-nav__button md-logo" aria-label="demo:canvas@0.1.0" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 5v16M20.001 19A2 2 0 0 0 22 17V5a2 2 0 0 0-1.999-2L16 3.002A5 5 0 0 0 12 5a5 5 0 0 0-4-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 1.999 2H8a5 5 0 0 1 4 2 5 5 0 0 1 4-2z"/></svg>
+
+    </a>
+    demo:canvas@0.1.0
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="./index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Overview
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  demo:canvas@0.1.0
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="canvas.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  demo:canvas@0.1.0
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#import-interface-democanvastypes010" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a>Import interface demo:canvas/types@0.1.0
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Import interface demo:canvas&#x2f;types@0.1.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#types" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Types
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#record-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>record image</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="record image">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#record-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Record Fields
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#record-point" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>record point</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="record point">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#record-fields_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Record Fields
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#record-rect" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>record rect</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="record rect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#record-fields_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Record Fields
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#record-rgba" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>record rgba</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="record rgba">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#record-fields_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Record Fields
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#record-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>record size</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="record size">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#record-fields_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Record Fields
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#record-stroke" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>record stroke</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="record stroke">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#record-fields_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Record Fields
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#enum-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>enum shape</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="enum shape">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enum-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Enum Cases
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-text-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>flags text-options</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="flags text-options">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#flags-members" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Flags members
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#import-interface-democanvascanvas-events010" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a>Import interface demo:canvas/canvas-events@0.1.0
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Import interface demo:canvas&#x2f;canvas-events@0.1.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#types_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Types
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#type-rect" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type rect</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Functions
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#painted-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>painted: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="painted: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#export-interface-democanvascanvas010" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a>Export interface demo:canvas/canvas@0.1.0
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Export interface demo:canvas&#x2f;canvas@0.1.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#types_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Types
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#type-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type image</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#type-point" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type point</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#type-rect_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type rect</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#type-rgba" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type rgba</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#type-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type shape</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#type-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type size</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#type-stroke" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type stroke</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#type-text-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type text-options</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resource-canvas" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>resource canvas</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#functions_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Functions
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constructorcanvas-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[constructor]canvas: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[constructor]canvas: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcanvasid-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]canvas.id: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]canvas.id: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcanvassize-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]canvas.size: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]canvas.size: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcanvasclear-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]canvas.clear: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]canvas.clear: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcanvasshape-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]canvas.shape: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]canvas.shape: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcanvastext-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]canvas.text: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]canvas.text: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcanvasfont-families-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]canvas.font-families: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]canvas.font-families: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcanvaspixel-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]canvas.pixel: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]canvas.pixel: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcanvasimage-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]canvas.image: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]canvas.image: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  
+                    
+                    
+                    
+                      
+                    
+                    
+                      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+                      <div class="md-sidebar-button__wrapper">
+                        <label class="md-sidebar-button" for="__toc"></label>
+                      </div>
+                    
+                  
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#import-interface-democanvastypes010" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a>Import interface demo:canvas/types@0.1.0
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Import interface demo:canvas&#x2f;types@0.1.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#types" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Types
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#record-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>record image</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="record image">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#record-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Record Fields
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#record-point" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>record point</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="record point">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#record-fields_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Record Fields
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#record-rect" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>record rect</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="record rect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#record-fields_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Record Fields
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#record-rgba" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>record rgba</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="record rgba">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#record-fields_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Record Fields
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#record-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>record size</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="record size">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#record-fields_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Record Fields
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#record-stroke" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>record stroke</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="record stroke">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#record-fields_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Record Fields
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#enum-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>enum shape</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="enum shape">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enum-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Enum Cases
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flags-text-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>flags text-options</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="flags text-options">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#flags-members" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Flags members
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#import-interface-democanvascanvas-events010" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a>Import interface demo:canvas/canvas-events@0.1.0
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Import interface demo:canvas&#x2f;canvas-events@0.1.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#types_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Types
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#type-rect" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type rect</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Functions
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#painted-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>painted: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="painted: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#export-interface-democanvascanvas010" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a>Export interface demo:canvas/canvas@0.1.0
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Export interface demo:canvas&#x2f;canvas@0.1.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#types_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Types
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#type-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type image</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#type-point" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type point</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#type-rect_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type rect</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#type-rgba" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type rgba</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#type-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type shape</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#type-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type size</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#type-stroke" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type stroke</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#type-text-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>type text-options</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resource-canvas" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>resource canvas</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#functions_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Functions
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constructorcanvas-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[constructor]canvas: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[constructor]canvas: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcanvasid-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]canvas.id: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]canvas.id: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcanvassize-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]canvas.size: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]canvas.size: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcanvasclear-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]canvas.clear: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]canvas.clear: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcanvasshape-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]canvas.shape: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]canvas.shape: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcanvastext-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]canvas.text: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]canvas.text: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcanvasfont-families-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]canvas.font-families: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]canvas.font-families: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcanvaspixel-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]canvas.pixel: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]canvas.pixel: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methodcanvasimage-func" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <a ></a><code>[method]canvas.image: func</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[method]canvas.image: func">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#params_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Params
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#return-values_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Return values
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                <a id="__skip" tabindex="-1"></a>
+                
+                  
+
+
+<h1 id="world-component"><a id="component"></a>World component<a class="headerlink" href="#world-component" title="Permanent link">&para;</a></h1>
+<ul>
+<li>Imports:<ul>
+<li>interface <code>demo:canvas/types@0.1.0</code></li>
+<li>interface <code>demo:canvas/canvas-events@0.1.0</code></li>
+</ul>
+</li>
+<li>Exports:<ul>
+<li>interface <code>demo:canvas/canvas@0.1.0</code></li>
+</ul>
+</li>
+</ul>
+<h2 id="import-interface-democanvastypes010"><a id="demo_canvas_types_0_1_0"></a>Import interface demo:canvas/types@0.1.0<a class="headerlink" href="#import-interface-democanvastypes010" title="Permanent link">&para;</a></h2>
+<p>Qt value types, records from Q_GADGETs, and Q_ENUM/Q_FLAG enums.</p>
+<hr />
+<h3 id="types">Types<a class="headerlink" href="#types" title="Permanent link">&para;</a></h3>
+<h4 id="record-image"><a id="image"></a><code>record image</code><a class="headerlink" href="#record-image" title="Permanent link">&para;</a></h4>
+<p>QImage. Pixels are RGBA8888, rows tightly packed.</p>
+<h5 id="record-fields">Record Fields<a class="headerlink" href="#record-fields" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="image.width"></a><code>width</code>: <code>u32</code></li>
+<li><a id="image.height"></a><code>height</code>: <code>u32</code></li>
+<li><a id="image.pixels"></a><code>pixels</code>: list&lt;<code>u8</code>&gt;</li>
+</ul>
+<h4 id="record-point"><a id="point"></a><code>record point</code><a class="headerlink" href="#record-point" title="Permanent link">&para;</a></h4>
+<p>QPoint.</p>
+<h5 id="record-fields_1">Record Fields<a class="headerlink" href="#record-fields_1" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="point.x"></a><code>x</code>: <code>s32</code></li>
+<li><a id="point.y"></a><code>y</code>: <code>s32</code></li>
+</ul>
+<h4 id="record-rect"><a id="rect"></a><code>record rect</code><a class="headerlink" href="#record-rect" title="Permanent link">&para;</a></h4>
+<p>QRect.</p>
+<h5 id="record-fields_2">Record Fields<a class="headerlink" href="#record-fields_2" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="rect.x"></a><code>x</code>: <code>s32</code></li>
+<li><a id="rect.y"></a><code>y</code>: <code>s32</code></li>
+<li><a id="rect.width"></a><code>width</code>: <code>s32</code></li>
+<li><a id="rect.height"></a><code>height</code>: <code>s32</code></li>
+</ul>
+<h4 id="record-rgba"><a id="rgba"></a><code>record rgba</code><a class="headerlink" href="#record-rgba" title="Permanent link">&para;</a></h4>
+<p>QColor.</p>
+<h5 id="record-fields_3">Record Fields<a class="headerlink" href="#record-fields_3" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="rgba.r"></a><code>r</code>: <code>u8</code></li>
+<li><a id="rgba.g"></a><code>g</code>: <code>u8</code></li>
+<li><a id="rgba.b"></a><code>b</code>: <code>u8</code></li>
+<li><a id="rgba.a"></a><code>a</code>: <code>u8</code></li>
+</ul>
+<h4 id="record-size"><a id="size"></a><code>record size</code><a class="headerlink" href="#record-size" title="Permanent link">&para;</a></h4>
+<p>QSize.</p>
+<h5 id="record-fields_4">Record Fields<a class="headerlink" href="#record-fields_4" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="size.width"></a><code>width</code>: <code>s32</code></li>
+<li><a id="size.height"></a><code>height</code>: <code>s32</code></li>
+</ul>
+<h4 id="record-stroke"><a id="stroke"></a><code>record stroke</code><a class="headerlink" href="#record-stroke" title="Permanent link">&para;</a></h4>
+<p>Q_GADGET Stroke.</p>
+<h5 id="record-fields_5">Record Fields<a class="headerlink" href="#record-fields_5" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="stroke.color"></a><code>color</code>: <a href="#rgba"><code>rgba</code></a></li>
+<li><a id="stroke.width"></a><code>width</code>: <code>f64</code></li>
+</ul>
+<h4 id="enum-shape"><a id="shape"></a><code>enum shape</code><a class="headerlink" href="#enum-shape" title="Permanent link">&para;</a></h4>
+<p>Q_ENUM Canvas::Shape.</p>
+<h5 id="enum-cases">Enum Cases<a class="headerlink" href="#enum-cases" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="shape.box"></a><code>box</code></li>
+<li><a id="shape.ellipse"></a><code>ellipse</code></li>
+<li><a id="shape.star"></a><code>star</code></li>
+</ul>
+<h4 id="flags-text-options"><a id="text_options"></a><code>flags text-options</code><a class="headerlink" href="#flags-text-options" title="Permanent link">&para;</a></h4>
+<p>Q_FLAG Canvas::TextOptions.</p>
+<h5 id="flags-members">Flags members<a class="headerlink" href="#flags-members" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="text_options.bold"></a><code>bold</code>:</li>
+<li><a id="text_options.italic"></a><code>italic</code>:</li>
+<li><a id="text_options.underline"></a><code>underline</code>:</li>
+</ul>
+<h2 id="import-interface-democanvascanvas-events010"><a id="demo_canvas_canvas_events_0_1_0"></a>Import interface demo:canvas/canvas-events@0.1.0<a class="headerlink" href="#import-interface-democanvascanvas-events010" title="Permanent link">&para;</a></h2>
+<p>Signals of Canvas, delivered to the host as calls.</p>
+<hr />
+<h3 id="types_1">Types<a class="headerlink" href="#types_1" title="Permanent link">&para;</a></h3>
+<h4 id="type-rect"><a id="rect"></a><code>type rect</code><a class="headerlink" href="#type-rect" title="Permanent link">&para;</a></h4>
+<p><a href="#rect"><code>rect</code></a></p>
+<hr />
+<h3 id="functions">Functions<a class="headerlink" href="#functions" title="Permanent link">&para;</a></h3>
+<h4 id="painted-func"><a id="painted"></a><code>painted: func</code><a class="headerlink" href="#painted-func" title="Permanent link">&para;</a></h4>
+<h5 id="params">Params<a class="headerlink" href="#params" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="painted.source"></a><code>source</code>: <code>u32</code></li>
+<li><a id="painted.dirty"></a><code>dirty</code>: <a href="#rect"><code>rect</code></a></li>
+</ul>
+<h2 id="export-interface-democanvascanvas010"><a id="demo_canvas_canvas_0_1_0"></a>Export interface demo:canvas/canvas@0.1.0<a class="headerlink" href="#export-interface-democanvascanvas010" title="Permanent link">&para;</a></h2>
+<hr />
+<h3 id="types_2">Types<a class="headerlink" href="#types_2" title="Permanent link">&para;</a></h3>
+<h4 id="type-image"><a id="image"></a><code>type image</code><a class="headerlink" href="#type-image" title="Permanent link">&para;</a></h4>
+<p><a href="#image"><code>image</code></a></p>
+<h4 id="type-point"><a id="point"></a><code>type point</code><a class="headerlink" href="#type-point" title="Permanent link">&para;</a></h4>
+<p><a href="#point"><code>point</code></a></p>
+<h4 id="type-rect_1"><a id="rect"></a><code>type rect</code><a class="headerlink" href="#type-rect_1" title="Permanent link">&para;</a></h4>
+<p><a href="#rect"><code>rect</code></a></p>
+<h4 id="type-rgba"><a id="rgba"></a><code>type rgba</code><a class="headerlink" href="#type-rgba" title="Permanent link">&para;</a></h4>
+<p><a href="#rgba"><code>rgba</code></a></p>
+<h4 id="type-shape"><a id="shape"></a><code>type shape</code><a class="headerlink" href="#type-shape" title="Permanent link">&para;</a></h4>
+<p><a href="#shape"><code>shape</code></a></p>
+<h4 id="type-size"><a id="size"></a><code>type size</code><a class="headerlink" href="#type-size" title="Permanent link">&para;</a></h4>
+<p><a href="#size"><code>size</code></a></p>
+<h4 id="type-stroke"><a id="stroke"></a><code>type stroke</code><a class="headerlink" href="#type-stroke" title="Permanent link">&para;</a></h4>
+<p><a href="#stroke"><code>stroke</code></a></p>
+<h4 id="type-text-options"><a id="text_options"></a><code>type text-options</code><a class="headerlink" href="#type-text-options" title="Permanent link">&para;</a></h4>
+<p><a href="#text_options"><code>text-options</code></a></p>
+<h4 id="resource-canvas"><a id="canvas"></a><code>resource canvas</code><a class="headerlink" href="#resource-canvas" title="Permanent link">&para;</a></h4>
+<hr />
+<h3 id="functions_1">Functions<a class="headerlink" href="#functions_1" title="Permanent link">&para;</a></h3>
+<h4 id="constructorcanvas-func"><a id="constructor_canvas"></a><code>[constructor]canvas: func</code><a class="headerlink" href="#constructorcanvas-func" title="Permanent link">&para;</a></h4>
+<h5 id="params_1">Params<a class="headerlink" href="#params_1" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="constructor_canvas.width"></a><code>width</code>: <code>s32</code></li>
+<li><a id="constructor_canvas.height"></a><code>height</code>: <code>s32</code></li>
+</ul>
+<h5 id="return-values">Return values<a class="headerlink" href="#return-values" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="constructor_canvas.0"></a> own&lt;<a href="#canvas"><code>canvas</code></a>&gt;</li>
+</ul>
+<h4 id="methodcanvasid-func"><a id="method_canvas_id"></a><code>[method]canvas.id: func</code><a class="headerlink" href="#methodcanvasid-func" title="Permanent link">&para;</a></h4>
+<p>Instance id; signals from this instance carry it as <code>source</code>.</p>
+<h5 id="params_2">Params<a class="headerlink" href="#params_2" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_canvas_id.self"></a><code>self</code>: borrow&lt;<a href="#canvas"><code>canvas</code></a>&gt;</li>
+</ul>
+<h5 id="return-values_1">Return values<a class="headerlink" href="#return-values_1" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_canvas_id.0"></a> <code>u32</code></li>
+</ul>
+<h4 id="methodcanvassize-func"><a id="method_canvas_size"></a><code>[method]canvas.size: func</code><a class="headerlink" href="#methodcanvassize-func" title="Permanent link">&para;</a></h4>
+<p>Q_PROPERTY read: Canvas::size</p>
+<h5 id="params_3">Params<a class="headerlink" href="#params_3" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_canvas_size.self"></a><code>self</code>: borrow&lt;<a href="#canvas"><code>canvas</code></a>&gt;</li>
+</ul>
+<h5 id="return-values_2">Return values<a class="headerlink" href="#return-values_2" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_canvas_size.0"></a> <a href="#size"><code>size</code></a></li>
+</ul>
+<h4 id="methodcanvasclear-func"><a id="method_canvas_clear"></a><code>[method]canvas.clear: func</code><a class="headerlink" href="#methodcanvasclear-func" title="Permanent link">&para;</a></h4>
+<h5 id="params_4">Params<a class="headerlink" href="#params_4" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_canvas_clear.self"></a><code>self</code>: borrow&lt;<a href="#canvas"><code>canvas</code></a>&gt;</li>
+<li><a id="method_canvas_clear.background"></a><code>background</code>: <a href="#rgba"><code>rgba</code></a></li>
+</ul>
+<h4 id="methodcanvasshape-func"><a id="method_canvas_shape"></a><code>[method]canvas.shape: func</code><a class="headerlink" href="#methodcanvasshape-func" title="Permanent link">&para;</a></h4>
+<h5 id="params_5">Params<a class="headerlink" href="#params_5" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_canvas_shape.self"></a><code>self</code>: borrow&lt;<a href="#canvas"><code>canvas</code></a>&gt;</li>
+<li><a id="method_canvas_shape.kind"></a><code>kind</code>: <a href="#shape"><code>shape</code></a></li>
+<li><a id="method_canvas_shape.rect"></a><code>rect</code>: <a href="#rect"><code>rect</code></a></li>
+<li><a id="method_canvas_shape.fill"></a><code>fill</code>: <a href="#rgba"><code>rgba</code></a></li>
+<li><a id="method_canvas_shape.stroke"></a><code>stroke</code>: <a href="#stroke"><code>stroke</code></a></li>
+</ul>
+<h4 id="methodcanvastext-func"><a id="method_canvas_text"></a><code>[method]canvas.text: func</code><a class="headerlink" href="#methodcanvastext-func" title="Permanent link">&para;</a></h4>
+<h5 id="params_6">Params<a class="headerlink" href="#params_6" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_canvas_text.self"></a><code>self</code>: borrow&lt;<a href="#canvas"><code>canvas</code></a>&gt;</li>
+<li><a id="method_canvas_text.at"></a><code>at</code>: <a href="#point"><code>point</code></a></li>
+<li><a id="method_canvas_text.text"></a><code>text</code>: <code>string</code></li>
+<li><a id="method_canvas_text.pixel_size"></a><code>pixel-size</code>: <code>s32</code></li>
+<li><a id="method_canvas_text.color"></a><code>color</code>: <a href="#rgba"><code>rgba</code></a></li>
+<li><a id="method_canvas_text.options"></a><code>options</code>: <a href="#text_options"><code>text-options</code></a></li>
+</ul>
+<h5 id="return-values_3">Return values<a class="headerlink" href="#return-values_3" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_canvas_text.0"></a> <a href="#rect"><code>rect</code></a></li>
+</ul>
+<h4 id="methodcanvasfont-families-func"><a id="method_canvas_font_families"></a><code>[method]canvas.font-families: func</code><a class="headerlink" href="#methodcanvasfont-families-func" title="Permanent link">&para;</a></h4>
+<h5 id="params_7">Params<a class="headerlink" href="#params_7" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_canvas_font_families.self"></a><code>self</code>: borrow&lt;<a href="#canvas"><code>canvas</code></a>&gt;</li>
+</ul>
+<h5 id="return-values_4">Return values<a class="headerlink" href="#return-values_4" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_canvas_font_families.0"></a> list&lt;<code>string</code>&gt;</li>
+</ul>
+<h4 id="methodcanvaspixel-func"><a id="method_canvas_pixel"></a><code>[method]canvas.pixel: func</code><a class="headerlink" href="#methodcanvaspixel-func" title="Permanent link">&para;</a></h4>
+<h5 id="params_8">Params<a class="headerlink" href="#params_8" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_canvas_pixel.self"></a><code>self</code>: borrow&lt;<a href="#canvas"><code>canvas</code></a>&gt;</li>
+<li><a id="method_canvas_pixel.at"></a><code>at</code>: <a href="#point"><code>point</code></a></li>
+</ul>
+<h5 id="return-values_5">Return values<a class="headerlink" href="#return-values_5" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_canvas_pixel.0"></a> option&lt;<a href="#rgba"><code>rgba</code></a>&gt;</li>
+</ul>
+<h4 id="methodcanvasimage-func"><a id="method_canvas_image"></a><code>[method]canvas.image: func</code><a class="headerlink" href="#methodcanvasimage-func" title="Permanent link">&para;</a></h4>
+<h5 id="params_9">Params<a class="headerlink" href="#params_9" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_canvas_image.self"></a><code>self</code>: borrow&lt;<a href="#canvas"><code>canvas</code></a>&gt;</li>
+</ul>
+<h5 id="return-values_6">Return values<a class="headerlink" href="#return-values_6" title="Permanent link">&para;</a></h5>
+<ul>
+<li><a id="method_canvas_image.0"></a> <a href="#image"><code>image</code></a></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://zensical.org/" target="_blank" rel="noopener">
+      Zensical
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog" role="status" aria-atomic="true">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      
+      
+        
+        
+      <script id="__config" type="application/json">{"annotate":null,"base":".","features":[],"redirect":null,"search":"./assets/javascripts/workers/search.719e0d91.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","clipboard.error":"Could not copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
+    
+    
+      <script src="./assets/javascripts/bundle.d31f0ffa.min.js"></script>
+      
+    
+  </body>
+</html>

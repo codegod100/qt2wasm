@@ -361,6 +361,19 @@ def test_qch_for_counter_example(tmp_path):
     assert "Counter" in keys
 
 
+@pytest.mark.skipif(not WIT_BINDGEN, reason="no wit-bindgen")
+@pytest.mark.parametrize("example", ["counter", "canvas"])
+def test_checked_in_example_docs_are_current(example, tmp_path):
+    from qt2wasm import mdsite
+
+    d = ROOT / "examples" / example
+    md = mdsite.markdown(d / f"{example}.wit", tmp_path)
+    assert (d / f"{example}.md").read_text() == md.read_text(), (
+        f"examples/{example}/{example}.md is stale: `pixi run docs`"
+    )
+    assert (d / f"{example}-docs" / "site" / "index.html").exists()
+
+
 def test_tidy_markdown_for_mkdocs():
     from qt2wasm import mdsite
 

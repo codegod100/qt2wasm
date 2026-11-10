@@ -213,10 +213,11 @@ qt2wasm mkdocs a.wit b.wit -o api --build   # api/mkdocs.yml + docs/ + site/
 package; `--build` builds it (`--builder zensical|mkdocs` to pick), or leave
 it out and run `zensical serve -f api/mkdocs.yml`. The theme is Material
 with Zensical or mkdocs-material, else plain `mkdocs` (`--theme` picks one).
-In this repo `pixi run docs` builds the counter example's site into
-`qt2wasm/build/counter-docs/site/` and `pixi run docs-serve` serves it.
-[`examples/counter/counter.md`](examples/counter/counter.md) is the checked-in
-Markdown for the sample WIT.
+The examples check in their docs, made with Zensical: `examples/<name>/<name>.wit`,
+`<name>.md` and the site project `<name>-docs/` with its built `site/` (see
+[`counter-docs/site/counter.html`](examples/counter/counter-docs/site/counter.html)).
+In this repo `pixi run docs` regenerates them from the checked-in WITs (a test
+fails when a `.md` is stale) and `pixi run docs-serve` serves the counter site.
 
 qt2wasm tidies wit-bindgen's Markdown for Python-Markdown: wit-bindgen puts
 enum-case and field docs after a bare `<p>`, which would be read as a raw

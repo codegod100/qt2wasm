@@ -8,7 +8,7 @@
 #   pixi run test             codegen tests + build and run both examples
 #   pixi run run              build the examples and run them under wasmtime
 #   pixi run example          build and run example/ (plain Qt-for-WASI program)
-#   pixi run docs             docs site (Zensical) for the counter example from its WIT
+#   pixi run docs             regenerate the example docs sites (Zensical) from their WIT
 #   pixi run build-pkg wasm-tools   rattler-build one recipe into out/
 #   pixi run build-qt2wasm    pixi-build the qt2wasm package into qt2wasm/dist/
 #   pixi run publish-status   what CI would still publish to nandi-testing
@@ -65,15 +65,14 @@ depends-on = ["examples"]
 env = { QT2WASM_TEST_COUNTER = "$PIXI_PROJECT_ROOT/qt2wasm/build/counter.wasm", QT2WASM_TEST_CANVAS = "$PIXI_PROJECT_ROOT/qt2wasm/build/canvas.wasm" }
 
 [tasks.docs]
-description = "Docs site for the counter example from its WIT (wit-bindgen markdown, built with Zensical); open qt2wasm/build/counter-docs/site/index.html"
-cmd = "python -m qt2wasm mkdocs qt2wasm/examples/counter/counter.wit -o qt2wasm/build/counter-docs --build"
-inputs = ["qt2wasm/qt2wasm/mdsite.py", "qt2wasm/examples/counter/counter.wit"]
-outputs = ["qt2wasm/build/counter-docs/site/index.html"]
+description = "Regenerate the checked-in example docs from their WIT: examples/<name>/<name>.md and the Zensical site <name>-docs/ (open <name>-docs/site/index.html)"
+cmd = "bash qt2wasm/examples/docs.sh"
+inputs = ["qt2wasm/qt2wasm/mdsite.py", "qt2wasm/examples/docs.sh", "qt2wasm/examples/*/*.wit"]
+outputs = ["qt2wasm/examples/*/*.md", "qt2wasm/examples/*/*-docs/site/index.html"]
 
 [tasks.docs-serve]
-description = "Serve the counter docs site with live reload (zensical serve)"
-cmd = "zensical serve -f qt2wasm/build/counter-docs/mkdocs.yml"
-depends-on = ["docs"]
+description = "Serve the counter example's docs site with live reload (zensical serve)"
+cmd = "zensical serve -f qt2wasm/examples/counter/counter-docs/mkdocs.yml"
 
 # --- packages --------------------------------------------------------------
 
