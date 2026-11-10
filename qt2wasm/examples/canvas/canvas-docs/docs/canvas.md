@@ -66,32 +66,59 @@ QSize.
 
 #### <a id="stroke"></a>`record stroke`
 
+How the outline of a shape is drawn.
+
 Q_GADGET Stroke.
 
 ##### Record Fields
 
 - <a id="stroke.color"></a>`color`: [`rgba`](#rgba)
+
+    This property holds the outline colour. The default is black.
+
 - <a id="stroke.width"></a>`width`: `f64`
 
+    This property holds the outline width in pixels. The default is 1.
+
 #### <a id="shape"></a>`enum shape`
+
+The shapes `shape` can draw.
 
 Q_ENUM Canvas::Shape.
 
 ##### Enum Cases
 
 - <a id="shape.box"></a>`box`
+
+    A rectangle with rounded corners.
+
 - <a id="shape.ellipse"></a>`ellipse`
+
+    An ellipse filling the rectangle.
+
 - <a id="shape.star"></a>`star`
 
+    A five-pointed star centred in the rectangle.
+
 #### <a id="text_options"></a>`flags text-options`
+
+Styles for `text`; combine them as flags.
 
 Q_FLAG Canvas::TextOptions.
 
 ##### Flags members
 
 - <a id="text_options.bold"></a>`bold`:
+
+    Bold weight.
+
 - <a id="text_options.italic"></a>`italic`:
+
+    Italic.
+
 - <a id="text_options.underline"></a>`underline`:
+
+    Underlined.
 
 ## <a id="demo_canvas_canvas_events_0_1_0"></a>Import interface demo:canvas/canvas-events@0.1.0
 
@@ -109,6 +136,8 @@ Signals of Canvas, delivered to the host as calls.
 ### Functions
 
 #### <a id="painted"></a>`painted: func`
+
+Emitted after each drawing call: `dirty` is the area that changed.
 
 ##### Params
 
@@ -147,11 +176,20 @@ Signals of Canvas, delivered to the host as calls.
 
 #### <a id="canvas"></a>`resource canvas`
 
+An RGBA image you draw shapes and text on with QPainter.
+
+The example shows QtGui inside a WASI component: QPainter and QFont draw
+into a QImage, and the host gets the pixels back as a record from
+`image`. Every drawing call emits `painted` with the area it changed.
+
 ----
 
 ### Functions
 
 #### <a id="constructor_canvas"></a>`[constructor]canvas: func`
+
+Creates a white canvas of `width` by `height` pixels (at least 1 by
+1).
 
 ##### Params
 
@@ -176,6 +214,9 @@ Instance id; signals from this instance carry it as `source`.
 
 #### <a id="method_canvas_size"></a>`[method]canvas.size: func`
 
+This property holds the canvas size in pixels, fixed when it is
+created.
+
 Q_PROPERTY read: Canvas::size
 
 ##### Params
@@ -188,12 +229,17 @@ Q_PROPERTY read: Canvas::size
 
 #### <a id="method_canvas_clear"></a>`[method]canvas.clear: func`
 
+Fills the whole canvas with `background`.
+
 ##### Params
 
 - <a id="method_canvas_clear.self"></a>`self`: borrow<[`canvas`](#canvas)>
 - <a id="method_canvas_clear.background"></a>`background`: [`rgba`](#rgba)
 
 #### <a id="method_canvas_shape"></a>`[method]canvas.shape: func`
+
+Draws a `kind` shape inside `rect`, filled with `fill` and outlined
+with `stroke`, antialiased.
 
 ##### Params
 
@@ -204,6 +250,13 @@ Q_PROPERTY read: Canvas::size
 - <a id="method_canvas_shape.stroke"></a>`stroke`: [`stroke`](#stroke)
 
 #### <a id="method_canvas_text"></a>`[method]canvas.text: func`
+
+Draws `text` with its baseline starting at `at`, `pixel-size` pixels
+high, in `color`, styled by `options`. Returns the text's bounding
+box.
+
+The font is the first family in `font-families`: the fonts compiled
+into the component.
 
 ##### Params
 
@@ -220,6 +273,8 @@ Q_PROPERTY read: Canvas::size
 
 #### <a id="method_canvas_font_families"></a>`[method]canvas.font-families: func`
 
+Returns the font families the component can draw with.
+
 ##### Params
 
 - <a id="method_canvas_font_families.self"></a>`self`: borrow<[`canvas`](#canvas)>
@@ -229,6 +284,9 @@ Q_PROPERTY read: Canvas::size
 - <a id="method_canvas_font_families.0"></a> list<`string`>
 
 #### <a id="method_canvas_pixel"></a>`[method]canvas.pixel: func`
+
+Returns the colour of the pixel at `at`, or nothing when `at` is
+outside the canvas.
 
 ##### Params
 
@@ -240,6 +298,8 @@ Q_PROPERTY read: Canvas::size
 - <a id="method_canvas_pixel.0"></a> option<[`rgba`](#rgba)>
 
 #### <a id="method_canvas_image"></a>`[method]canvas.image: func`
+
+Returns the pixels drawn so far, as RGBA.
 
 ##### Params
 

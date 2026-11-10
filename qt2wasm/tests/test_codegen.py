@@ -293,6 +293,19 @@ def test_qdoc_webxml_becomes_wit_docs(tmp_path):
         )
 
 
+def test_qdoc_struct_gadget_docs(tmp_path):
+    # qdoc writes a `struct` Q_GADGET as <struct>, not <class>.
+    (tmp_path / "s.webxml").write_text(
+        '<WebXML><document><struct name="Stroke"><description>'
+        "<brief>How the outline is drawn.</brief></description>"
+        '<property name="width"><description><brief>This property holds the '
+        "width.</brief></description></property></struct></document></WebXML>"
+    )
+    d = docs.load_webxml([tmp_path / "s.webxml"])
+    assert d.cls("Stroke") == "How the outline is drawn."
+    assert d.prop("Stroke", "width") == "This property holds the width."
+
+
 def test_doc_lines_wrap_prose_not_code():
     text = "word " * 30 + "\n\n```\n" + "x" * 100 + "\n```"
     lines = docs.doc_lines(text.strip(), "    ")

@@ -33,40 +33,79 @@ interface types {
         width: s32,
         height: s32,
     }
+    /// How the outline of a shape is drawn.
+    ///
     /// Q_GADGET Stroke.
     record stroke {
+        /// This property holds the outline colour. The default is black.
         color: rgba,
+        /// This property holds the outline width in pixels. The default is 1.
         width: f64,
     }
+    /// The shapes `shape` can draw.
+    ///
     /// Q_ENUM Canvas::Shape.
     enum shape {
+        /// A rectangle with rounded corners.
         box,
+        /// An ellipse filling the rectangle.
         ellipse,
+        /// A five-pointed star centred in the rectangle.
         star,
     }
+    /// Styles for `text`; combine them as flags.
+    ///
     /// Q_FLAG Canvas::TextOptions.
     flags text-options {
+        /// Bold weight.
         bold,
+        /// Italic.
         italic,
+        /// Underlined.
         underline,
     }
 }
 
+/// An RGBA image you draw shapes and text on with QPainter.
+///
 /// Exported from Canvas (canvas.h).
 interface canvas {
     use types.{image, point, rect, rgba, shape, size, stroke, text-options};
 
+    /// An RGBA image you draw shapes and text on with QPainter.
+    ///
+    /// The example shows QtGui inside a WASI component: QPainter and QFont draw
+    /// into a QImage, and the host gets the pixels back as a record from
+    /// `image`. Every drawing call emits `painted` with the area it changed.
     resource canvas {
+        /// Creates a white canvas of `width` by `height` pixels (at least 1 by
+        /// 1).
         constructor(width: s32, height: s32);
         /// Instance id; signals from this instance carry it as `source`.
         id: func() -> u32;
+        /// This property holds the canvas size in pixels, fixed when it is
+        /// created.
+        ///
         /// Q_PROPERTY read: Canvas::size
         size: func() -> size;
+        /// Fills the whole canvas with `background`.
         clear: func(background: rgba);
+        /// Draws a `kind` shape inside `rect`, filled with `fill` and outlined
+        /// with `stroke`, antialiased.
         shape: func(kind: shape, rect: rect, fill: rgba, stroke: stroke);
+        /// Draws `text` with its baseline starting at `at`, `pixel-size` pixels
+        /// high, in `color`, styled by `options`. Returns the text's bounding
+        /// box.
+        ///
+        /// The font is the first family in `font-families`: the fonts compiled
+        /// into the component.
         text: func(at: point, text: string, pixel-size: s32, color: rgba, options: text-options) -> rect;
+        /// Returns the font families the component can draw with.
         font-families: func() -> list<string>;
+        /// Returns the colour of the pixel at `at`, or nothing when `at` is
+        /// outside the canvas.
         pixel: func(at: point) -> option<rgba>;
+        /// Returns the pixels drawn so far, as RGBA.
         image: func() -> image;
     }
 }
@@ -75,6 +114,7 @@ interface canvas {
 interface canvas-events {
     use types.{rect};
 
+    /// Emitted after each drawing call: `dirty` is the area that changed.
     painted: func(source: u32, dirty: rect);
 }
 

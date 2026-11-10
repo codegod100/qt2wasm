@@ -312,8 +312,10 @@ def load_webxml(paths) -> Docs:
     docs = Docs()
     for p in paths:
         root = ET.parse(p).getroot()
-        for cls in root.iter("class"):
-            _class(cls, docs)
+        # A Q_GADGET declared with `struct` is a <struct> element, not <class>.
+        for tag in ("class", "struct"):
+            for cls in root.iter(tag):
+                _class(cls, docs)
     return docs
 
 

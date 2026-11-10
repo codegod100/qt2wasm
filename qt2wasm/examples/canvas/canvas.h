@@ -36,11 +36,9 @@ public:
 
     Q_INVOKABLE void clear(const QColor &background);
     Q_INVOKABLE void shape(Canvas::Shape kind, const QRect &rect, const QColor &fill, const Stroke &stroke);
-    // Draws text; returns its bounding box.
     Q_INVOKABLE QRect text(const QPoint &at, const QString &text, int pixelSize, const QColor &color,
                            Canvas::TextOptions options);
     Q_INVOKABLE QStringList fontFamilies() const;
-    // The colour at a pixel, or nothing outside the canvas.
     Q_INVOKABLE std::optional<QColor> pixel(const QPoint &at) const;
     Q_INVOKABLE QImage image() const { return m_image; }
 

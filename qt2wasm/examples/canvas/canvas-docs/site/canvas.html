@@ -2032,27 +2032,54 @@
 <li><a id="size.height"></a><code>height</code>: <code>s32</code></li>
 </ul>
 <h4 id="record-stroke"><a id="stroke"></a><code>record stroke</code><a class="headerlink" href="#record-stroke" title="Permanent link">&para;</a></h4>
+<p>How the outline of a shape is drawn.</p>
 <p>Q_GADGET Stroke.</p>
 <h5 id="record-fields_5">Record Fields<a class="headerlink" href="#record-fields_5" title="Permanent link">&para;</a></h5>
 <ul>
-<li><a id="stroke.color"></a><code>color</code>: <a href="#rgba"><code>rgba</code></a></li>
-<li><a id="stroke.width"></a><code>width</code>: <code>f64</code></li>
+<li>
+<p><a id="stroke.color"></a><code>color</code>: <a href="#rgba"><code>rgba</code></a></p>
+<p>This property holds the outline colour. The default is black.</p>
+</li>
+<li>
+<p><a id="stroke.width"></a><code>width</code>: <code>f64</code></p>
+<p>This property holds the outline width in pixels. The default is 1.</p>
+</li>
 </ul>
 <h4 id="enum-shape"><a id="shape"></a><code>enum shape</code><a class="headerlink" href="#enum-shape" title="Permanent link">&para;</a></h4>
+<p>The shapes <code>shape</code> can draw.</p>
 <p>Q_ENUM Canvas::Shape.</p>
 <h5 id="enum-cases">Enum Cases<a class="headerlink" href="#enum-cases" title="Permanent link">&para;</a></h5>
 <ul>
-<li><a id="shape.box"></a><code>box</code></li>
-<li><a id="shape.ellipse"></a><code>ellipse</code></li>
-<li><a id="shape.star"></a><code>star</code></li>
+<li>
+<p><a id="shape.box"></a><code>box</code></p>
+<p>A rectangle with rounded corners.</p>
+</li>
+<li>
+<p><a id="shape.ellipse"></a><code>ellipse</code></p>
+<p>An ellipse filling the rectangle.</p>
+</li>
+<li>
+<p><a id="shape.star"></a><code>star</code></p>
+<p>A five-pointed star centred in the rectangle.</p>
+</li>
 </ul>
 <h4 id="flags-text-options"><a id="text_options"></a><code>flags text-options</code><a class="headerlink" href="#flags-text-options" title="Permanent link">&para;</a></h4>
+<p>Styles for <code>text</code>; combine them as flags.</p>
 <p>Q_FLAG Canvas::TextOptions.</p>
 <h5 id="flags-members">Flags members<a class="headerlink" href="#flags-members" title="Permanent link">&para;</a></h5>
 <ul>
-<li><a id="text_options.bold"></a><code>bold</code>:</li>
-<li><a id="text_options.italic"></a><code>italic</code>:</li>
-<li><a id="text_options.underline"></a><code>underline</code>:</li>
+<li>
+<p><a id="text_options.bold"></a><code>bold</code>:</p>
+<p>Bold weight.</p>
+</li>
+<li>
+<p><a id="text_options.italic"></a><code>italic</code>:</p>
+<p>Italic.</p>
+</li>
+<li>
+<p><a id="text_options.underline"></a><code>underline</code>:</p>
+<p>Underlined.</p>
+</li>
 </ul>
 <h2 id="import-interface-democanvascanvas-events010"><a id="demo_canvas_canvas_events_0_1_0"></a>Import interface demo:canvas/canvas-events@0.1.0<a class="headerlink" href="#import-interface-democanvascanvas-events010" title="Permanent link">&para;</a></h2>
 <p>Signals of Canvas, delivered to the host as calls.</p>
@@ -2063,6 +2090,7 @@
 <hr />
 <h3 id="functions">Functions<a class="headerlink" href="#functions" title="Permanent link">&para;</a></h3>
 <h4 id="painted-func"><a id="painted"></a><code>painted: func</code><a class="headerlink" href="#painted-func" title="Permanent link">&para;</a></h4>
+<p>Emitted after each drawing call: <code>dirty</code> is the area that changed.</p>
 <h5 id="params">Params<a class="headerlink" href="#params" title="Permanent link">&para;</a></h5>
 <ul>
 <li><a id="painted.source"></a><code>source</code>: <code>u32</code></li>
@@ -2088,9 +2116,15 @@
 <h4 id="type-text-options"><a id="text_options"></a><code>type text-options</code><a class="headerlink" href="#type-text-options" title="Permanent link">&para;</a></h4>
 <p><a href="#text_options"><code>text-options</code></a></p>
 <h4 id="resource-canvas"><a id="canvas"></a><code>resource canvas</code><a class="headerlink" href="#resource-canvas" title="Permanent link">&para;</a></h4>
+<p>An RGBA image you draw shapes and text on with QPainter.</p>
+<p>The example shows QtGui inside a WASI component: QPainter and QFont draw
+into a QImage, and the host gets the pixels back as a record from
+<code>image</code>. Every drawing call emits <code>painted</code> with the area it changed.</p>
 <hr />
 <h3 id="functions_1">Functions<a class="headerlink" href="#functions_1" title="Permanent link">&para;</a></h3>
 <h4 id="constructorcanvas-func"><a id="constructor_canvas"></a><code>[constructor]canvas: func</code><a class="headerlink" href="#constructorcanvas-func" title="Permanent link">&para;</a></h4>
+<p>Creates a white canvas of <code>width</code> by <code>height</code> pixels (at least 1 by
+1).</p>
 <h5 id="params_1">Params<a class="headerlink" href="#params_1" title="Permanent link">&para;</a></h5>
 <ul>
 <li><a id="constructor_canvas.width"></a><code>width</code>: <code>s32</code></li>
@@ -2111,6 +2145,8 @@
 <li><a id="method_canvas_id.0"></a> <code>u32</code></li>
 </ul>
 <h4 id="methodcanvassize-func"><a id="method_canvas_size"></a><code>[method]canvas.size: func</code><a class="headerlink" href="#methodcanvassize-func" title="Permanent link">&para;</a></h4>
+<p>This property holds the canvas size in pixels, fixed when it is
+created.</p>
 <p>Q_PROPERTY read: Canvas::size</p>
 <h5 id="params_3">Params<a class="headerlink" href="#params_3" title="Permanent link">&para;</a></h5>
 <ul>
@@ -2121,12 +2157,15 @@
 <li><a id="method_canvas_size.0"></a> <a href="#size"><code>size</code></a></li>
 </ul>
 <h4 id="methodcanvasclear-func"><a id="method_canvas_clear"></a><code>[method]canvas.clear: func</code><a class="headerlink" href="#methodcanvasclear-func" title="Permanent link">&para;</a></h4>
+<p>Fills the whole canvas with <code>background</code>.</p>
 <h5 id="params_4">Params<a class="headerlink" href="#params_4" title="Permanent link">&para;</a></h5>
 <ul>
 <li><a id="method_canvas_clear.self"></a><code>self</code>: borrow&lt;<a href="#canvas"><code>canvas</code></a>&gt;</li>
 <li><a id="method_canvas_clear.background"></a><code>background</code>: <a href="#rgba"><code>rgba</code></a></li>
 </ul>
 <h4 id="methodcanvasshape-func"><a id="method_canvas_shape"></a><code>[method]canvas.shape: func</code><a class="headerlink" href="#methodcanvasshape-func" title="Permanent link">&para;</a></h4>
+<p>Draws a <code>kind</code> shape inside <code>rect</code>, filled with <code>fill</code> and outlined
+with <code>stroke</code>, antialiased.</p>
 <h5 id="params_5">Params<a class="headerlink" href="#params_5" title="Permanent link">&para;</a></h5>
 <ul>
 <li><a id="method_canvas_shape.self"></a><code>self</code>: borrow&lt;<a href="#canvas"><code>canvas</code></a>&gt;</li>
@@ -2136,6 +2175,11 @@
 <li><a id="method_canvas_shape.stroke"></a><code>stroke</code>: <a href="#stroke"><code>stroke</code></a></li>
 </ul>
 <h4 id="methodcanvastext-func"><a id="method_canvas_text"></a><code>[method]canvas.text: func</code><a class="headerlink" href="#methodcanvastext-func" title="Permanent link">&para;</a></h4>
+<p>Draws <code>text</code> with its baseline starting at <code>at</code>, <code>pixel-size</code> pixels
+high, in <code>color</code>, styled by <code>options</code>. Returns the text's bounding
+box.</p>
+<p>The font is the first family in <code>font-families</code>: the fonts compiled
+into the component.</p>
 <h5 id="params_6">Params<a class="headerlink" href="#params_6" title="Permanent link">&para;</a></h5>
 <ul>
 <li><a id="method_canvas_text.self"></a><code>self</code>: borrow&lt;<a href="#canvas"><code>canvas</code></a>&gt;</li>
@@ -2150,6 +2194,7 @@
 <li><a id="method_canvas_text.0"></a> <a href="#rect"><code>rect</code></a></li>
 </ul>
 <h4 id="methodcanvasfont-families-func"><a id="method_canvas_font_families"></a><code>[method]canvas.font-families: func</code><a class="headerlink" href="#methodcanvasfont-families-func" title="Permanent link">&para;</a></h4>
+<p>Returns the font families the component can draw with.</p>
 <h5 id="params_7">Params<a class="headerlink" href="#params_7" title="Permanent link">&para;</a></h5>
 <ul>
 <li><a id="method_canvas_font_families.self"></a><code>self</code>: borrow&lt;<a href="#canvas"><code>canvas</code></a>&gt;</li>
@@ -2159,6 +2204,8 @@
 <li><a id="method_canvas_font_families.0"></a> list&lt;<code>string</code>&gt;</li>
 </ul>
 <h4 id="methodcanvaspixel-func"><a id="method_canvas_pixel"></a><code>[method]canvas.pixel: func</code><a class="headerlink" href="#methodcanvaspixel-func" title="Permanent link">&para;</a></h4>
+<p>Returns the colour of the pixel at <code>at</code>, or nothing when <code>at</code> is
+outside the canvas.</p>
 <h5 id="params_8">Params<a class="headerlink" href="#params_8" title="Permanent link">&para;</a></h5>
 <ul>
 <li><a id="method_canvas_pixel.self"></a><code>self</code>: borrow&lt;<a href="#canvas"><code>canvas</code></a>&gt;</li>
@@ -2169,6 +2216,7 @@
 <li><a id="method_canvas_pixel.0"></a> option&lt;<a href="#rgba"><code>rgba</code></a>&gt;</li>
 </ul>
 <h4 id="methodcanvasimage-func"><a id="method_canvas_image"></a><code>[method]canvas.image: func</code><a class="headerlink" href="#methodcanvasimage-func" title="Permanent link">&para;</a></h4>
+<p>Returns the pixels drawn so far, as RGBA.</p>
 <h5 id="params_9">Params<a class="headerlink" href="#params_9" title="Permanent link">&para;</a></h5>
 <ul>
 <li><a id="method_canvas_image.self"></a><code>self</code>: borrow&lt;<a href="#canvas"><code>canvas</code></a>&gt;</li>
