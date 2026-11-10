@@ -317,6 +317,11 @@ def test_qdoc_documents_counter_example(tmp_path):
     assert "/// Returns the last `n` values the counter held, oldest first." in text
     assert "/// Emitted when the count changes to `value`." in text
     assert "        /// Add one.\n        linear," in text
+    # examples/counter/counter.wit is the checked-in sample of this output.
+    assert (proj / "counter.wit").read_text() == text, (
+        "examples/counter/counter.wit is stale: copy qt2wasm/build/counter.wit "
+        "over it after `pixi run examples`"
+    )
 
 
 def _pkg(name):

@@ -144,6 +144,10 @@ history: func(n: s32) -> list<f64>;
 | `\enum`, `\value` | the enum or flags, and each case |
 | `\a arg`, `\c code`, `\l`/`\sa` to a member | `` `arg` ``, `` `code` ``, the member's WIT name |
 
+[`examples/counter/counter.wit`](examples/counter/counter.wit) is the
+WIT generated from the documented [`counter.cpp`](examples/counter/counter.cpp),
+checked in as a sample (a test keeps it current when qdoc is installed).
+
 `--docs auto` (the default) uses qdoc when it is found and skips it quietly
 otherwise. `--docs qdoc` makes a missing or failing qdoc an error, and
 `--docs none` turns it off. `qt2wasm wit ... --docs-from DIR` does the same
