@@ -26,8 +26,11 @@ from pathlib import Path
 
 from qt2wasm import gluegen, model, witgen
 
-ROOT = Path(__file__).resolve().parent.parent  # tools/qt2wasm
-REPO = ROOT.parent.parent  # the ditherterm checkout, when vendored there
+_PKG = Path(__file__).resolve().parent
+# Installed (conda/pip): cmake/, include/ and runtime/ ship inside the package
+# as _data/. From a checkout: tools/qt2wasm itself.
+ROOT = _PKG / "_data" if (_PKG / "_data" / "cmake").is_dir() else _PKG.parent
+REPO = Path(os.environ.get("QT2WASM_REPO", _PKG.parent.parent.parent))  # wasm/qt lives here
 
 
 class BuildError(Exception):
