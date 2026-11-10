@@ -22,7 +22,7 @@ The conda package carries the `qt2wasm` command, its CMake module, headers and
 runtime, and depends on the whole toolchain as prebuilt packages: `qt6-wasi`
 (Qt for WASI, host moc, the toolchain file; pulls in `wasi-sdk`), `wit-bindgen`,
 `wasm-tools` and `wasi-preview1-adapter` from nandi-testing (built from
-`recipes/` in this repo, linux-64), plus cmake, ninja, binaryen and fontTools
+`recipes/` in this repo, linux-64), plus cmake, ninja, binaryen, fontTools and Zensical
 from conda-forge. Nothing is compiled at install time. The `publish-qt2wasm`
 job in `.forge/jobs.toml` builds it with pixi-build on Depot and publishes it
 when the version in `pixi.toml` and `pyproject.toml` is new.
@@ -35,7 +35,7 @@ channels = ["conda-forge", "https://prefix.dev/nandi-testing"]
 platforms = ["linux-64"]
 
 [dependencies]
-qt2wasm = { version = "0.6.*", channel = "https://prefix.dev/nandi-testing" }
+qt2wasm = { version = "0.7.*", channel = "https://prefix.dev/nandi-testing" }
 ```
 
 then `pixi run qt2wasm build path/to/project -o app.wasm` (add `--font some.ttf`
@@ -183,30 +183,43 @@ qhelpgenerator comes from qttools too: on Debian or Ubuntu, `apt install
 qt6-tools-dev-tools` gives `/usr/lib/qt6/libexec/qhelpgenerator` (6.4 tested),
 or set `QT2WASM_QHELPGENERATOR`.
 
-### Docs site: WIT -> Markdown -> MkDocs
+### Docs site: WIT -> Markdown -> Zensical
 
-`qt2wasm build` also writes `<name>.md` next to the `.wasm` and `.wit`: the
-WIT as Markdown, from `wit-bindgen markdown`, so the qdoc prose is in it.
-To turn one or more WITs into a docs site:
+Every `qt2wasm build` also writes the component's API docs:
+
+- `<name>.md` next to the `.wasm` and `.wit`: the WIT as Markdown, from
+  `wit-bindgen markdown`, so the qdoc prose is in it.
+- `<name>-docs/`: a docs site project (`mkdocs.yml`, `docs/`) and the built
+  site in `<name>-docs/site/` (open `index.html`). It is built with
+  [Zensical](https://zensical.org), the successor of Material for MkDocs,
+  which reads `mkdocs.yml` as is. Plain MkDocs is the fallback when Zensical
+  is not installed.
+
+`--site auto` (the default) builds the site when Zensical or MkDocs is found
+and otherwise writes only the `.md`, quietly; a failed site build is a
+warning. `--site always` makes either an error, and `--site none` writes only
+the `.md`. `QT2WASM_SITE_BUILDER=mkdocs` forces MkDocs. Zensical is a
+dependency of the conda package (from conda-forge), so with the package the
+site is always made.
+
+For WITs you have already, or several components on one site:
 
 ```sh
 qt2wasm markdown app.wit -o docs/           # just the Markdown page
-qt2wasm mkdocs app.wit -o app-docs --build  # mkdocs.yml + docs/ + site/
+qt2wasm mkdocs a.wit b.wit -o api --build   # api/mkdocs.yml + docs/ + site/
 ```
 
-`mkdocs` writes an MkDocs project (one page per WIT plus an overview, named
-after the WIT package) and with `--build` runs `mkdocs build` into
-`app-docs/site/`; leave `--build` out to `mkdocs serve` or edit the config
-first. It uses the Material theme when `mkdocs-material` is installed and the
-plain `mkdocs` theme otherwise (`--theme` picks one). MkDocs is not a
-dependency of the package: install `mkdocs` (and `mkdocs-material`) from
-conda-forge. In this repo `pixi run docs` builds the counter example's site
-into `qt2wasm/build/counter-docs/site/` and `pixi run docs-serve` serves it.
+`mkdocs` writes one page per WIT plus an overview, named after the WIT
+package; `--build` builds it (`--builder zensical|mkdocs` to pick), or leave
+it out and run `zensical serve -f api/mkdocs.yml`. The theme is Material
+with Zensical or mkdocs-material, else plain `mkdocs` (`--theme` picks one).
+In this repo `pixi run docs` builds the counter example's site into
+`qt2wasm/build/counter-docs/site/` and `pixi run docs-serve` serves it.
 [`examples/counter/counter.md`](examples/counter/counter.md) is the checked-in
 Markdown for the sample WIT.
 
 qt2wasm tidies wit-bindgen's Markdown for Python-Markdown: wit-bindgen puts
-enum-case and field docs after a bare `<p>`, which MkDocs would read as a raw
+enum-case and field docs after a bare `<p>`, which would be read as a raw
 HTML block that swallows the rest of the page.
 
 ## Writing a component (WIT-first)
@@ -243,7 +256,7 @@ one.
 | fontTools (optional, subsetting) | Python | 4.x |
 | qdoc (optional, WIT docs) | `QT2WASM_QDOC`, `PATH`, `/usr/lib/qt6/bin/qdoc` | 6.4 |
 | qhelpgenerator (optional, `.qch`) | `QT2WASM_QHELPGENERATOR`, `PATH`, `/usr/lib/qt6/libexec/qhelpgenerator` | 6.4 |
-| mkdocs (optional, `qt2wasm mkdocs --build`) | `PATH`, Python | 1.6, mkdocs-material 9.x |
+| zensical, or mkdocs (docs site) | `QT2WASM_SITE_BUILDER`, `PATH`, Python | zensical 0.1, mkdocs 1.6 |
 
 ## Measured (2026-11-09)
 

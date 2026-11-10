@@ -10,7 +10,7 @@ preview = ["pixi-build"]
 
 [package]
 name = "qt2wasm"
-version = "0.6.0"
+version = "0.7.0"
 description = "Build Qt C++ into WASI WebAssembly components"
 homepage = "https://fileapi.fastapicloud.dev/forge/#nandi.uk/qt2wasm"
 
@@ -33,3 +33,4 @@ qt6-wasi = "6.8.3.*"
 wit-bindgen = "0.46.*"
 wasm-tools = "1.239.*"
 wasi-preview1-adapter = "36.*"
+zensical = ">=0.1"

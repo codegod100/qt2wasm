@@ -9,7 +9,9 @@ Steps (each logged with its time):
                          the Qt doc comments as WIT /// docs when qdoc is
                          found (--docs). The WIT is also written next to
                          the component as <name>.wit, as Markdown
-                         (wit-bindgen markdown) as <name>.md, and, when
+                         (wit-bindgen markdown) as <name>.md, a docs site
+                         <name>-docs/site/ (Zensical or MkDocs, --site),
+                         and, when
                          qdoc and qhelpgenerator are found, the Qt Help
                          file <name>.qch (--qch).
                          WIT-first (--wit): bindings only, you implement them.
@@ -281,6 +283,46 @@ def project_docs(args, tools: Tools, project: Path, bdir: Path, gen: Path):
     return docs
 
 
+def project_site(args, tools: Tools, wit: Path, out: Path):
+    """<out>.md (wit-bindgen markdown) and the docs site <out>-docs/ (mkdocs.yml,
+    docs/, site/ built with Zensical or MkDocs). --site auto (default) skips
+    the site quietly when neither is installed and warns if the build fails;
+    --site always makes either an error; --site none writes only the .md."""
+    from qt2wasm import mdsite
+
+    world = getattr(args, "world", None)
+    try:
+        md = mdsite.markdown(
+            wit, out.parent, name=out.stem, world=world, wit_bindgen=tools.wit_bindgen
+        )
+    except Exception as e:
+        raise BuildError(str(e)) from e
+    mode = getattr(args, "site", "auto") or "auto"
+    if mode == "none":
+        return None
+    if mdsite.find_builder() is None:
+        if mode == "always":
+            raise BuildError(
+                "--site always: neither zensical nor mkdocs found (install "
+                "zensical from conda-forge or PyPI, or set QT2WASM_SITE_BUILDER)"
+            )
+        log(f"site: no zensical or mkdocs found, only {md.name}")
+        return None
+    sdir = out.parent / f"{out.stem}-docs"
+    try:
+        cfg = mdsite.mkdocs_project(
+            [wit], sdir, world=world, wit_bindgen=tools.wit_bindgen
+        )
+        site = mdsite.build_site(cfg)
+    except Exception as e:
+        if mode == "always":
+            raise BuildError(str(e)) from e
+        log(f"site: failed, only {md.name}: {str(e).splitlines()[0]}")
+        return None
+    log(f"site: {site / 'index.html'}")
+    return site
+
+
 def project_qch(args, tools: Tools, project: Path, bdir: Path, gen: Path, out: Path):
     """qdoc HTML + qhelpgenerator -> <out>.qch, or None. --qch auto (default)
     skips quietly when either tool is missing and warns if one fails;
@@ -407,16 +449,9 @@ def build(args) -> Path:
     if not args.wit:
         out.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(wit_dir / "component.wit", out.with_suffix(".wit"))
-        from qt2wasm import mdsite
-
-        mdsite.markdown(
-            out.with_suffix(".wit"),
-            out.parent,
-            name=out.stem,
-            wit_bindgen=tools.wit_bindgen,
-        )
     out.parent.mkdir(parents=True, exist_ok=True)
     project_qch(args, tools, project, bdir, gen, out)
+    project_site(args, tools, wit_dir if args.wit else out.with_suffix(".wit"), out)
     if args.font:
         fonts = [Path(f).resolve() for f in args.font]
         if args.font_subset != "none":

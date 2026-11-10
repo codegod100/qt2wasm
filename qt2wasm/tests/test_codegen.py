@@ -389,11 +389,14 @@ def test_counter_markdown_and_mkdocs(tmp_path):
     cfg = mdsite.mkdocs_project([wit], tmp_path / "site")
     assert 'site_name: "demo:counter@0.1.0"' in cfg.read_text()
     assert (tmp_path / "site" / "docs" / "counter.md").exists()
-    if shutil.which("mkdocs"):
-        site = mdsite.mkdocs_build(cfg, strict=True)
+    for b in mdsite.BUILDERS:
+        if mdsite.find_builder(b) is None:
+            continue
+        cfg = mdsite.mkdocs_project([wit], tmp_path / b, builder=b)
+        site = mdsite.build_site(cfg, strict=True, builder=b)
         html = (site / "counter.html").read_text()
-        assert "A counter that steps by one or doubles." in html
-        assert "Double the value (zero becomes one)." in html
+        assert "A counter that steps by one or doubles." in html, b
+        assert "Double the value (zero becomes one)." in html, b
 
 
 def _pkg(name):

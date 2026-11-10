@@ -6,8 +6,9 @@ qt2wasm wit HEADER.json... [-o x.wit] moc metatypes -> WIT (Qt-first);
 qt2wasm glue HEADER.json... --bindings component.h -o glue.cpp
 qt2wasm qch DIR [-o name.qch]          qdoc comments in DIR -> Qt Help (.qch)
 qt2wasm markdown APP.wit [-o DIR]     WIT -> Markdown (wit-bindgen markdown)
-qt2wasm mkdocs APP.wit... -o DIR      MkDocs site project from the WIT;
-                                      --build also runs `mkdocs build`
+qt2wasm mkdocs APP.wit... -o DIR      docs site project (mkdocs.yml) from the
+                                      WIT; --build builds it with Zensical
+                                      (or MkDocs)
 """
 
 from __future__ import annotations
@@ -131,6 +132,14 @@ def main(argv: list[str] | None = None) -> int:
         "qhelpgenerator: auto (when both are found, the default), always "
         "(required), none",
     )
+    b.add_argument(
+        "--site",
+        choices=["auto", "always", "none"],
+        default="auto",
+        help="docs site <name>-docs/site/ from the WIT, built with Zensical "
+        "(or MkDocs): auto (when one is found, the default), always (required), "
+        "none (<name>.md only)",
+    )
     b.add_argument("--opt", choices=["size", "speed"], default="size")
     b.add_argument(
         "--lto",
@@ -190,17 +199,25 @@ def main(argv: list[str] | None = None) -> int:
     md.add_argument("-o", "--out-dir", default=".", help="directory for <name>.md")
     md.add_argument("--world", help="world to document (if the WIT has several)")
 
-    mk = sub.add_parser("mkdocs", help="MkDocs site project from WIT files")
+    mk = sub.add_parser(
+        "mkdocs", help="docs site project (mkdocs.yml, Zensical/MkDocs) from WIT files"
+    )
     mk.add_argument("wit", nargs="+", help=".wit files (one page each)")
     mk.add_argument(
         "-o", "--output", required=True, help="project dir: mkdocs.yml + docs/"
     )
     mk.add_argument("--title", help="site_name (default: the WIT package)")
     mk.add_argument(
-        "--theme", help="MkDocs theme (default material if installed, else mkdocs)"
+        "--theme",
+        help="theme (default material with Zensical or mkdocs-material, else mkdocs)",
     )
     mk.add_argument(
-        "--build", action="store_true", help="also run `mkdocs build` (into DIR/site)"
+        "--build",
+        action="store_true",
+        help="also build it into DIR/site (Zensical, else MkDocs)",
+    )
+    mk.add_argument(
+        "--builder", choices=["zensical", "mkdocs"], help="force one site builder"
     )
 
     a = ap.parse_args(argv)
@@ -225,11 +242,15 @@ def main(argv: list[str] | None = None) -> int:
             from qt2wasm import mdsite
 
             cfg = mdsite.mkdocs_project(
-                [Path(w) for w in a.wit], Path(a.output), a.title, a.theme
+                [Path(w) for w in a.wit],
+                Path(a.output),
+                a.title,
+                a.theme,
+                builder=a.builder,
             )
             print(cfg)
             if a.build:
-                print(mdsite.mkdocs_build(cfg) / "index.html")
+                print(mdsite.build_site(cfg, builder=a.builder) / "index.html")
         elif a.cmd == "glue":
             Path(a.output).write_text(
                 gluegen.generate(_model(a.json), Path(a.bindings))
