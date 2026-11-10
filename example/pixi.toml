@@ -14,7 +14,9 @@ wasmtime = { version = "36.*", channel = "https://prefix.dev/nandi-testing" }   
 
 [tasks.build]
 description = "Configure with the WASI Qt's qt-cmake and build build/qt6-wasi-example.wasm"
-cmd = "$QT_WASI_PREFIX/bin/qt-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build"
+# CMAKE_EXPORT_COMPILE_COMMANDS keeps build/compile_commands.json current, so
+# clangd/Zed understands this file (Qt headers live in the pixi environment).
+cmd = "$QT_WASI_PREFIX/bin/qt-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON && cmake --build build"
 inputs = ["main.cpp", "CMakeLists.txt"]
 outputs = ["build/qt6-wasi-example.wasm"]
 
