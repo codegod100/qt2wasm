@@ -52,6 +52,18 @@ def log(msg: str) -> None:
     print(f"qt2wasm: {msg}", file=sys.stderr, flush=True)
 
 
+# Host compiler settings that a conda env with compilers exports on activation
+# (e.g. CFLAGS=-march=nocona -mtune=haswell, CC=x86_64-conda-linux-gnu-cc).
+# CMake folds them into the wasm32-wasip1 build, where clang rejects them.
+HOST_BUILD_VARS = ("CFLAGS", "CXXFLAGS", "CPPFLAGS", "LDFLAGS", "DEBUG_CFLAGS", "DEBUG_CXXFLAGS",
+                   "DEBUG_CPPFLAGS", "CC", "CXX", "CPP", "LD", "AR", "NM", "RANLIB")
+
+
+def wasm_env() -> dict:
+    """os.environ without the host compiler settings, for the WASI CMake build."""
+    return {k: v for k, v in os.environ.items() if k not in HOST_BUILD_VARS}
+
+
 def run(cmd: list, **kw) -> subprocess.CompletedProcess:
     cmd = [str(c) for c in cmd]
     r = subprocess.run(cmd, capture_output=True, text=True, check=False, **kw)
@@ -522,8 +534,8 @@ def build(args) -> Path:
     ]
     if tools.compat:
         cfg.append(f"-DQT2WASM_COMPAT_DIR={tools.compat}")
-    run(cfg)
-    run(["cmake", "--build", cmk])
+    run(cfg, env=wasm_env())
+    run(["cmake", "--build", cmk], env=wasm_env())
     cores = sorted(cmk.glob("*.core.wasm"))
     if len(cores) != 1:
         raise BuildError(

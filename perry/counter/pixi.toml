@@ -9,7 +9,7 @@ channels = ["https://prefix.dev/nandi-testing", "conda-forge"]
 platforms = ["linux-64"]
 
 [dependencies]
-qt2wasm = ">=0.8.0"
+qt2wasm = ">=0.8.1"
 perry = "==0.5.1665"
 perry-component-host = "==0.5.1665"
 wasm-tools = "*"
