@@ -31,19 +31,21 @@ From a ditherterm checkout, with [pixi](https://pixi.sh) and `just` on PATH
 (the `wasm` pixi env brings Python, wasmtime-py, cmake, ninja and Rust):
 
 ```sh
-just qt2wasm-setup      # once, ~30 min: wasi-sdk 27, adapter, wit-bindgen,
-                        # wasm-tools, host moc, static Qt 6.8.3 for WASI
-just qt2wasm-examples   # build tools/qt2wasm/build/counter.wasm and canvas.wasm
-just qt2wasm-run        # run both under wasmtime; writes build/canvas.png
-just qt2wasm-test       # codegen tests + the built components
+pixi run qt2wasm-run    # builds everything it needs, then runs both examples
+                        # under wasmtime; writes build/canvas.png
+pixi run qt2wasm-test   # codegen tests + the built components
 ```
 
-`qt2wasm-setup` is `just wasm-qt-setup`, `wasm-qt-host` and `wasm-qt-build`,
-skipping what is already built. The canvas example compiles in a font: it uses
+These are pixi tasks chained with `depends-on`: `qt2wasm-run` and
+`qt2wasm-test` depend on `qt2wasm-examples` (builds `tools/qt2wasm/build/counter.wasm`
+and `canvas.wasm`, cached on its inputs), which depends on `qt2wasm-setup` =
+`wasm-qt-setup` -> `wasm-qt-host` -> `wasm-qt-build` (wasi-sdk 27, adapter,
+wit-bindgen, wasm-tools, host moc, static Qt 6.8.3 for WASI: ~30 min once, then
+skipped). The `just qt2wasm-*` recipes are aliases of the same tasks. The canvas example compiles in a font: it uses
 DejaVu Sans from the pixi env or the system, or `QT2WASM_FONT=/path/to.ttf`.
 `wasm-opt` (binaryen) is optional; put it on PATH for the smaller sizes below.
 
-Your own project: `just qt2wasm build path/to/project -o app.wasm` (add
+Your own project: `pixi run qt2wasm build path/to/project -o app.wasm` (add
 `--font some.ttf` for QtGui). Without just, run `python -m qt2wasm build ...`
 with `PYTHONPATH=tools/qt2wasm`; it finds wasi-sdk, Qt, moc, wit-bindgen,
 wasm-tools and the adapter under `wasm/qt/.build` (see "Tools it looks for").
