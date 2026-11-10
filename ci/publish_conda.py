@@ -1,17 +1,17 @@
 """fileapi forge job: build the qt2wasm conda package on Depot with pixi-build
 and publish it to prefix.dev/nandi-testing.
 
-Runs from .forge/jobs.toml on the forge runner (python3 and the Depot CLI, no
-curl or Docker):
+Runs from .forge/jobs.toml. Forge jobs already run on Depot (python:3.12
+image, no curl or Docker), so it builds in place; with the Depot CLI on PATH it
+builds ci/Dockerfile remotely instead.
 
 1. Read the version from tools/qt2wasm/pixi.toml. If nandi-testing already has
    qt2wasm at that version, stop: bump the version to publish again.
-2. `depot build` tools/qt2wasm/ci/Dockerfile, which runs `pixi build` and
-   exports the .conda file to ./dist.
+2. `pixi build` the package into tools/qt2wasm/dist.
 3. Upload it with `pixi upload prefix` (pixi fetched from its GitHub release).
 
 Secrets (user secrets work): PREFIX_TOKEN, a prefix.dev API key with write
-access to nandi-testing; DEPOT_TOKEN; DEPOT_PROJECT_ID.
+access to nandi-testing (DEPOT_TOKEN and DEPOT_PROJECT_ID for a remote build).
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -70,7 +71,7 @@ def pixi() -> str:
 
 
 def main() -> None:
-    for var in ("PREFIX_TOKEN", "DEPOT_TOKEN"):
+    for var in ("PREFIX_TOKEN",):
         if not os.environ.get(var):
             sys.exit(f"{var} secret is not set (a user or repo secret in fileapi)")
     ver = version()
@@ -80,25 +81,29 @@ def main() -> None:
         return
 
     dist = PKG / "dist"
-    cmd = ["depot", "build", "--progress", "plain", "--platform", "linux/amd64",
-           "-f", str(HERE / "Dockerfile"), "--output", f"type=local,dest={dist}", str(PKG)]
-    if os.environ.get("DEPOT_PROJECT_ID"):
-        cmd[2:2] = ["--project", os.environ["DEPOT_PROJECT_ID"]]
+    exe = pixi()
+    if shutil.which("depot"):  # a runner with the Depot CLI: build remotely
+        cmd = ["depot", "build", "--progress", "plain", "--platform", "linux/amd64",
+               "-f", str(HERE / "Dockerfile"), "--output", f"type=local,dest={dist}", str(PKG)]
+        if os.environ.get("DEPOT_PROJECT_ID"):
+            cmd[2:2] = ["--project", os.environ["DEPOT_PROJECT_ID"]]
+    else:  # the forge job already runs in a Depot container: build here
+        cmd = [exe, "build", "--path", str(PKG / "pixi.toml"), "--output-dir", str(dist)]
     say("$ " + " ".join(cmd))
-    log = PKG / "depot.log"
+    log = PKG / "build.log"
     with open(log, "wb") as f:
         code = subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, check=False).returncode
     lines = log.read_text("utf-8", "replace").splitlines()
     say("\n".join(lines[-80:]))  # the job keeps only the tail of its output
     if code != 0:
-        sys.exit(f"depot build failed (exit {code})")
+        sys.exit(f"build failed (exit {code})")
 
     files = sorted(dist.glob("*.conda"))
     if not files:
-        sys.exit(f"depot build produced no .conda in {dist}")
+        sys.exit(f"the build produced no .conda in {dist}")
     say("Built: " + ", ".join(f"{p.name} ({p.stat().st_size} B)" for p in files))
     env = {**os.environ, "PREFIX_API_KEY": os.environ["PREFIX_TOKEN"]}
-    up = [pixi(), "upload", "prefix", "--channel", CHANNEL, "--skip-existing", *map(str, files)]
+    up = [exe, "upload", "prefix", "--channel", CHANNEL, "--skip-existing", *map(str, files)]
     subprocess.run(up, env=env, check=True)
     say(f"Done: https://prefix.dev/channels/{CHANNEL}/packages/{NAME}")
 
