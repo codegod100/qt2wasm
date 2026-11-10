@@ -8,13 +8,20 @@ here=$(cd "$(dirname "$0")" && pwd)
 work=$(mktemp -d)
 cp "$here"/*.ts "$work/"
 cd "$work"
-perry compile hello.ts -o hello
+# CI keeps only the tail of the log: on failure show the compiler's errors.
+pc() {
+    if ! perry compile "$@" > perry.log 2>&1; then
+        grep -v -E '^ *[0-9]+: <unknown>|strip-dedup|codegen:' perry.log | grep -i -B2 -A6 'error' | head -80
+        exit 1
+    fi
+}
+pc hello.ts -o hello
 test "$(./hello)" = "hello from perry"
-perry compile wasm.ts -o wasm
+pc wasm.ts -o wasm
 test "$(./wasm)" = "add: 42"
-perry compile http.ts -o http
+pc http.ts -o http
 test "$(./http)" = "function"
-perry compile ui.ts -o ui --target linux
+pc ui.ts -o ui --target linux
 test -x ui
 # The UI binary resolves GTK4 from this env through its rpath.
 if ldd ui | grep 'not found'; then exit 1; fi
