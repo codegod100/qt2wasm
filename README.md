@@ -30,6 +30,7 @@ All are linux-64 conda packages on [prefix.dev/nandi-testing](https://prefix.dev
 | `wasi-preview1-adapter` | 36.0.0 | wasmtime's `wasi_snapshot_preview1.reactor.wasm` |
 | `wasmtime` | 36.0.0 | the wasmtime CLI |
 | `jco` | 1.41.0 | `@bytecodealliance/jco` from npm on conda-forge nodejs (`jco transpile` etc.) |
+| `perry` | 0.5.1665 | [Perry](https://github.com/PerryTS/perry): TypeScript to native binaries, `perry/ui` on GTK4, embedded wasm interpreter; links with conda-forge GTK4 and the conda C toolchain |
 
 Nothing is compiled when you install: Qt and the tools are prebuilt in CI.
 

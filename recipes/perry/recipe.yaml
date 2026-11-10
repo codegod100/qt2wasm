@@ -1,0 +1,64 @@
+# Perry 0.5.1665 (@perryts/perry from npm): compiles TypeScript to native
+# executables with LLVM, with a native UI toolkit (perry/ui maps to GTK4 on
+# Linux) and an embedded WebAssembly interpreter (wasmi). qt2wasm uses it to
+# run a Qt component's core module inside a native GTK4 app.
+#
+# The prebuilt compiler, runtime/stdlib/GTK4/wasm-host archives and the native
+# extension pack (node:http, net, ws, zlib, ...) come from npm, so a compile
+# never downloads anything. Everything Perry links against comes from
+# conda-forge: GTK4, libshumate, GStreamer, PulseAudio, libsoup and the conda
+# C toolchain (gcc_linux-64 + sysroot). WebKitGTK 6 (Perry's WebView) is not on
+# conda-forge, so build.sh compiles static stub archives for it that abort with
+# a message if a WebView is ever created; every other widget works.
+#
+# $PREFIX/bin/perry is a wrapper (perry-wrapper.sh) that puts the conda
+# toolchain and libraries on Perry's link line, with an rpath to this env.
+# Published to prefix.dev/nandi-testing by ci/publish.py.
+context:
+  version: "0.5.1665"
+
+package:
+  name: perry
+  version: ${{ version }}
+
+build:
+  number: 0
+  skip: not (linux and x86_64)
+  prefix_detection:
+    ignore: true
+  dynamic_linking:
+    binary_relocation: false
+  script: bash "$RECIPE_DIR/build.sh"
+
+requirements:
+  build:
+    - ${{ compiler('c') }}
+    - nodejs >=20
+    - zstd
+  run:
+    # the prebuilt compiler itself links these
+    - libgcc
+    - libstdcxx
+    - libzlib
+    - gcc_linux-64
+    - pkg-config
+    - gtk4 >=4.14
+    - libshumate
+    - gstreamer
+    - gst-plugins-base
+    - pulseaudio-client
+    - libsoup >=3
+
+tests:
+  - files:
+      recipe:
+        - test/
+    script:
+      - perry --version
+      - test "$(perry --version)" = "perry ${{ version }}"
+      - bash test/run.sh
+
+about:
+  homepage: https://github.com/PerryTS/perry
+  license: MIT
+  summary: Native TypeScript compiler (LLVM) with GTK4 UI and an embedded wasm interpreter
