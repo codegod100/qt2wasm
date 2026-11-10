@@ -7,8 +7,8 @@ It is not a new compiler. It is a layer over upstream tools: wasi-sdk's clang
 compiles, host `moc` reads your classes, qt2wasm generates the WIT and the
 C++ glue, `wit-bindgen c` generates the canonical-ABI bindings, `wasm-opt`
 shrinks the module and `wasm-tools` wraps it into a component. Qt itself is
-the static QtCore + QtGui 6.8.3 WASI build from `wasm/qt` (offscreen
-platform, no threads, bundled FreeType and HarfBuzz).
+the static QtCore + QtGui 6.8.3 WASI build from the `qt6-wasi` conda package
+(offscreen platform, no threads, bundled FreeType and HarfBuzz).
 
 Design doc: "qt2wasm: Qt C++ to WASI components" (Claude Doc in the project).
 
@@ -19,9 +19,11 @@ pixi global install -c https://prefix.dev/nandi-testing -c conda-forge qt2wasm
 ```
 
 The conda package carries the `qt2wasm` command, its CMake module, headers and
-runtime, plus cmake, ninja, binaryen and fontTools. Bring wasi-sdk, the Qt for
-WASI prefix, host moc, wit-bindgen and wasm-tools yourself (see "Tools it looks
-for"). It is built by the `qt2wasm-conda` job in `.forge/jobs.toml` on Depot
+runtime, and depends on the whole toolchain as prebuilt packages: `qt6-wasi`
+(Qt for WASI, host moc, the toolchain file; pulls in `wasi-sdk`), `wit-bindgen`,
+`wasm-tools` and `wasi-preview1-adapter` from nandi-testing (built on Depot by
+nandi.uk/qt6-wasi, linux-64), plus cmake, ninja, binaryen and fontTools from
+conda-forge. Nothing is compiled at install time. It is built by the `qt2wasm-conda` job in `.forge/jobs.toml` on Depot
 with pixi-build and published when the version in `pixi.toml` and
 `pyproject.toml` is new.
 
@@ -38,17 +40,16 @@ pixi run qt2wasm-test   # codegen tests + the built components
 
 These are pixi tasks chained with `depends-on`: `qt2wasm-run` and
 `qt2wasm-test` depend on `qt2wasm-examples` (builds `tools/qt2wasm/build/counter.wasm`
-and `canvas.wasm`, cached on its inputs), which depends on `qt2wasm-setup` =
-`wasm-qt-setup` -> `wasm-qt-host` -> `wasm-qt-build` (wasi-sdk 27, adapter,
-wit-bindgen, wasm-tools, host moc, static Qt 6.8.3 for WASI: ~30 min once, then
-skipped). The `just qt2wasm-*` recipes are aliases of the same tasks. The canvas example compiles in a font: it uses
+and `canvas.wasm`, cached on its inputs). The `wasm` env installs the toolchain
+prebuilt (qt6-wasi, wasi-sdk, wit-bindgen, wasm-tools, the adapter), so there
+is no Qt build step. The `just qt2wasm-*` recipes are aliases of the same tasks. The canvas example compiles in a font: it uses
 DejaVu Sans from the pixi env or the system, or `QT2WASM_FONT=/path/to.ttf`.
 `wasm-opt` (binaryen) is optional; put it on PATH for the smaller sizes below.
 
 Your own project: `pixi run qt2wasm build path/to/project -o app.wasm` (add
 `--font some.ttf` for QtGui). Without just, run `python -m qt2wasm build ...`
 with `PYTHONPATH=tools/qt2wasm`; it finds wasi-sdk, Qt, moc, wit-bindgen,
-wasm-tools and the adapter under `wasm/qt/.build` (see "Tools it looks for").
+wasm-tools and the adapter in the active conda/pixi env (see "Tools it looks for").
 
 ## Writing a component (Qt-first)
 
@@ -127,14 +128,14 @@ one.
 
 | Tool | Where | Tested with |
 | --- | --- | --- |
-| wasi-sdk | `--wasi-sdk`, `WASI_SDK_PREFIX`, `wasm/qt/.build/wasi-sdk` | 27.0 |
-| Qt for WASI prefix | `--qt-prefix`, `QT2WASM_QT_PREFIX`, `wasm/qt/.build/wasi` | 6.8.3 |
-| Qt WASI toolchain file | `--qt-toolchain`, `QT2WASM_QT_TOOLCHAIN`, `wasm/qt/cmake/wasi-qt.cmake` | |
-| host moc | `QT2WASM_MOC`, `PATH`, `/usr/lib/qt6/libexec/moc`, `wasm/qt/.build/host/libexec/moc` | 6.4 and 6.8 (output revision 68) |
-| wit-bindgen | `QT2WASM_WIT_BINDGEN`, `PATH`, `wasm/qt/.build/tools/bin` | 0.46.0 |
-| wasm-tools | `QT2WASM_WASM_TOOLS`, `PATH`, `wasm/qt/.build/tools/bin` | 1.239.0 |
+| wasi-sdk | `--wasi-sdk`, `WASI_SDK_PREFIX`, `$CONDA_PREFIX/opt/wasi-sdk` | 27.0 |
+| Qt for WASI prefix | `--qt-prefix`, `QT2WASM_QT_PREFIX`, `$CONDA_PREFIX/opt/qt6-wasi/wasi` | 6.8.3 |
+| Qt WASI toolchain file | `--qt-toolchain`, `QT2WASM_QT_TOOLCHAIN`, `$CONDA_PREFIX/opt/qt6-wasi/cmake/wasi-qt.cmake` | |
+| host moc | `QT2WASM_MOC`, `PATH`, `$CONDA_PREFIX/opt/qt6-wasi/host/libexec/moc`, `/usr/lib/qt6/libexec/moc` | 6.4 and 6.8 (output revision 68) |
+| wit-bindgen | `QT2WASM_WIT_BINDGEN`, `PATH`, `$CONDA_PREFIX/bin` | 0.46.0 |
+| wasm-tools | `QT2WASM_WASM_TOOLS`, `PATH`, `$CONDA_PREFIX/bin` | 1.239.0 |
 | wasm-opt (optional) | `QT2WASM_WASM_OPT`, `PATH` | binaryen 119 |
-| preview1 reactor adapter | `QT2WASM_ADAPTER`, `wasm/qt/.build/adapter.wasm` | wasmtime 36 |
+| preview1 reactor adapter | `QT2WASM_ADAPTER`, `$CONDA_PREFIX/share/wasi-preview1-adapter/` | wasmtime 36 |
 | fontTools (optional, subsetting) | Python | 4.x |
 
 ## Measured (2026-11-09)

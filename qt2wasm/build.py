@@ -30,7 +30,6 @@ _PKG = Path(__file__).resolve().parent
 # Installed (conda/pip): cmake/, include/ and runtime/ ship inside the package
 # as _data/. From a checkout: tools/qt2wasm itself.
 ROOT = _PKG / "_data" if (_PKG / "_data" / "cmake").is_dir() else _PKG.parent
-REPO = Path(os.environ.get("QT2WASM_REPO", _PKG.parent.parent.parent))  # wasm/qt lives here
 
 
 class BuildError(Exception):
@@ -77,6 +76,10 @@ def _which(name: str, env: str, *extra: Path) -> Path | None:
 
 
 def find_tools(args) -> Tools:
+    """The toolchain comes from conda packages on prefix.dev/nandi-testing:
+    qt6-wasi (Qt + host moc + toolchain file, pulls in wasi-sdk), wit-bindgen,
+    wasm-tools and wasi-preview1-adapter. Their activation scripts export the
+    env vars below; without activation, look under this Python's prefix."""
     missing = []
 
     def need(label: str, value: Path | None, hint: str) -> Path:
@@ -85,65 +88,52 @@ def find_tools(args) -> Tools:
             return Path("/nonexistent")
         return Path(value)
 
-    qtdir = REPO / "wasm" / "qt"
+    prefix = Path(os.environ.get("CONDA_PREFIX") or sys.prefix)
+    qtpkg = prefix / "opt" / "qt6-wasi"
+    pkg_hint = "install qt6-wasi from https://prefix.dev/nandi-testing"
     wasi_sdk = need(
         "wasi-sdk",
-        Path(
-            args.wasi_sdk
-            or os.environ.get("WASI_SDK_PREFIX")
-            or qtdir / ".build" / "wasi-sdk"
-        ),
-        "--wasi-sdk or WASI_SDK_PREFIX; wasi-sdk 27 for Qt 6.8",
+        Path(args.wasi_sdk or os.environ.get("WASI_SDK_PREFIX") or prefix / "opt" / "wasi-sdk"),
+        f"--wasi-sdk or WASI_SDK_PREFIX; {pkg_hint} (it depends on wasi-sdk 27)",
     )
     qt_prefix = need(
         "Qt for WASI",
-        Path(
-            args.qt_prefix
-            or os.environ.get("QT2WASM_QT_PREFIX")
-            or qtdir / ".build" / "wasi"
-        ),
-        "--qt-prefix or QT2WASM_QT_PREFIX; `just wasm-qt-build` makes wasm/qt/.build/wasi",
+        Path(args.qt_prefix or os.environ.get("QT2WASM_QT_PREFIX") or qtpkg / "wasi"),
+        f"--qt-prefix or QT2WASM_QT_PREFIX; {pkg_hint}",
     )
     qt_toolchain = need(
         "Qt WASI toolchain file",
         Path(
             args.qt_toolchain
             or os.environ.get("QT2WASM_QT_TOOLCHAIN")
-            or qtdir / "cmake" / "wasi-qt.cmake"
+            or qtpkg / "cmake" / "wasi-qt.cmake"
         ),
-        "--qt-toolchain or QT2WASM_QT_TOOLCHAIN (wasm/qt/cmake/wasi-qt.cmake)",
+        f"--qt-toolchain or QT2WASM_QT_TOOLCHAIN; {pkg_hint}",
     )
     compat = qt_toolchain.parent.parent / "compat"
     moc = need(
         "host moc",
         _which(
-            "moc",
-            "QT2WASM_MOC",
-            Path("/usr/lib/qt6/libexec/moc"),
-            qtdir / ".build" / "host" / "libexec" / "moc",
+            "moc", "QT2WASM_MOC", qtpkg / "host" / "libexec" / "moc", Path("/usr/lib/qt6/libexec/moc")
         ),
-        "QT2WASM_MOC; any Qt 6 moc with output revision 68 works",
+        f"QT2WASM_MOC; {pkg_hint}, or any Qt 6 moc with output revision 68",
     )
-    qt_tools = qtdir / ".build" / "tools" / "bin"  # `just wasm-qt-setup` installs here
     wit_bindgen = need(
         "wit-bindgen",
-        _which("wit-bindgen", "QT2WASM_WIT_BINDGEN", qt_tools / "wit-bindgen"),
-        "QT2WASM_WIT_BINDGEN or `just wasm-qt-setup`; 0.46 tested",
+        _which("wit-bindgen", "QT2WASM_WIT_BINDGEN", prefix / "bin" / "wit-bindgen"),
+        "QT2WASM_WIT_BINDGEN; install wit-bindgen from nandi-testing (0.46 tested)",
     )
     wasm_tools = need(
         "wasm-tools",
-        _which("wasm-tools", "QT2WASM_WASM_TOOLS", qt_tools / "wasm-tools"),
-        "QT2WASM_WASM_TOOLS or `just wasm-qt-setup`; 1.239 tested",
+        _which("wasm-tools", "QT2WASM_WASM_TOOLS", prefix / "bin" / "wasm-tools"),
+        "QT2WASM_WASM_TOOLS; install wasm-tools from nandi-testing (1.239 tested)",
     )
     wasm_opt = _which("wasm-opt", "QT2WASM_WASM_OPT")
     adapter = _which(
         "wasi_snapshot_preview1.reactor.wasm",
         "QT2WASM_ADAPTER",
-        qtdir / ".build" / "adapter.wasm",  # wasmtime 36's reactor adapter, from build.sh setup
+        prefix / "share" / "wasi-preview1-adapter" / "wasi_snapshot_preview1.reactor.wasm",
     )
-    if adapter is None and qtdir.exists():
-        found = sorted(qtdir.glob("**/wasi_snapshot_preview1.reactor*.wasm"))
-        adapter = found[0] if found else None
     if missing:
         raise BuildError("missing tools:\n" + "\n".join(missing))
     return Tools(
