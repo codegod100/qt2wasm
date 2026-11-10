@@ -7,7 +7,7 @@
 # extension pack (node:http, net, ws, zlib, ...) come from npm, so a compile
 # never downloads anything. Everything Perry links against comes from
 # conda-forge: GTK4, GStreamer, PulseAudio, libsoup and the conda C toolchain
-# (gcc_linux-64 + sysroot). WebKitGTK 6 (Perry's WebView) is not on conda-forge
+# (gcc_linux-64 + sysroot, plus clang, which Perry uses as an assembler). WebKitGTK 6 (Perry's WebView) is not on conda-forge
 # and libshumate (MapView) does not solve next to nandi-testing, so build.sh
 # compiles static stub archives for both that abort with a message if a
 # WebView or MapView is ever created; every other widget works.
@@ -42,6 +42,8 @@ requirements:
     - libstdcxx
     - libzlib
     - gcc_linux-64
+    # Perry assembles its statepoint (GC) rewrite with `clang` from PATH
+    - clang
     - pkg-config
     - gtk4 >=4.14
     - gstreamer
