@@ -1,0 +1,20 @@
+# A Perry app that loads a qt2wasm component with wasmtime (perry/component)
+# and draws its UI with GTK4. Everything comes prebuilt from nandi-testing:
+#   pixi run build    # counter.wasm, gen/bindings.ts, counter-cli, counter-app
+#   pixi run smoke    # run the CLI against the component
+#   pixi run app      # open the GTK4 window
+[workspace]
+name = "perry-counter"
+channels = ["https://prefix.dev/nandi-testing", "conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+qt2wasm = ">=0.8.0"
+perry = "==0.5.1665"
+perry-component-host = "==0.5.1665"
+wasm-tools = "*"
+
+[tasks]
+build = "bash build.sh"
+smoke = { cmd = "./counter-cli counter.wasm", depends-on = ["build"] }
+app = "./counter-app"

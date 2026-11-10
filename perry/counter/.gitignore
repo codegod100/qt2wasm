@@ -1,0 +1,7 @@
+.pixi/
+counter.wasm
+counter-js/
+counter-cli
+counter-app
+wit/
+gen/

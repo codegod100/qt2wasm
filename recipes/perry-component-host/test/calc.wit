@@ -1,0 +1,14 @@
+package test:demo@1.0.0;
+
+interface host {
+  double: func(x: u32) -> u32;
+}
+
+interface calc {
+  add: func(a: u32, b: u32) -> u32;
+}
+
+world calc-world {
+  import host;
+  export calc;
+}

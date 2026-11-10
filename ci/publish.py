@@ -5,6 +5,7 @@ Packages, in build order (later ones may depend on earlier ones):
   wasi-sdk, wit-bindgen, wasm-tools, wasi-preview1-adapter, wasmtime  repackaged upstream releases
   jco                                                                 @bytecodealliance/jco from npm on conda-forge nodejs
   perry                                                               @perryts/perry (TypeScript -> native, GTK4 UI, wasmi) from npm
+  perry-component-host                                                Perry's wasmtime component host + perry-wit, from Perry source
   qt6-wasi                                                            qtbase 6.8.3 for wasm32-wasip1 (~30+ min)
 
 For each recipe: if nandi-testing already has that name + version + build
@@ -42,7 +43,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 RECIPES = HERE.parent / "recipes"
-ORDER = ["wasi-sdk", "wit-bindgen", "wasm-tools", "wasi-preview1-adapter", "wasmtime", "jco", "perry", "qt6-wasi"]
+ORDER = ["wasi-sdk", "wit-bindgen", "wasm-tools", "wasi-preview1-adapter", "wasmtime", "jco", "perry", "perry-component-host", "qt6-wasi"]
 CHANNEL = "nandi-testing"
 CHANNEL_URL = f"https://prefix.dev/{CHANNEL}"
 UA = {"User-Agent": "qt2wasm-ci/1"}

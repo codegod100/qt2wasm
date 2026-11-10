@@ -1,0 +1,64 @@
+# perry-component-host 0.5.1665: Perry's optional native Component Model engine
+# (libperry_component_host.a: wasmtime 48 with the component model, Cranelift
+# JIT and WASI Preview 2) plus perry-wit, the WIT -> typed TypeScript bindings
+# generator. A Perry program that imports `perry/component` links the archive
+# and loads real wasm components (qt2wasm's <name>.wasm as-is) while Perry
+# draws the UI with GTK4.
+#
+# The npm Perry release (recipes/perry) does not ship this archive, so it is
+# built here from Perry's source at the exact revision of that npm release
+# (perry-ext's target.json names it): the engine and the runtime must share the
+# versioned C ABI. Built like Perry's own release builds its wasm host archive:
+# the pinned nightly, `--profile prod`, LTO off for the staticlib.
+#
+# Installs $PREFIX/lib/perry/component/libperry_component_host.a and an
+# activation script that points Perry's library search at it (PERRY_LIB_DIR),
+# so `perry compile` finds it in an activated env (pixi run / conda activate).
+# Published to prefix.dev/nandi-testing by ci/publish.py.
+context:
+  version: "0.5.1665"
+  rev: 08b384fa365bf1a656498f629f97d6a9e688cffd
+  rust: nightly-2026-10-04
+
+package:
+  name: perry-component-host
+  version: ${{ version }}
+
+build:
+  number: 0
+  skip: not (linux and x86_64)
+  prefix_detection:
+    ignore: true
+  dynamic_linking:
+    binary_relocation: false
+  script:
+    env:
+      PERRY_REV: ${{ rev }}
+      PERRY_RUST: ${{ rust }}
+    file: build.sh
+
+requirements:
+  build:
+    - ${{ compiler('c') }}
+    - git
+    - curl
+    - ca-certificates
+  run:
+    - perry ==${{ version }}
+
+tests:
+  - files:
+      recipe:
+        - test/
+    requirements:
+      run:
+        - wasm-tools
+    script:
+      - perry-wit --help || true
+      - test -f "$CONDA_PREFIX/lib/perry/component/libperry_component_host.a"
+      - bash test/run.sh
+
+about:
+  homepage: https://github.com/PerryTS/perry
+  license: MIT
+  summary: Perry's native Component Model host (wasmtime) and the perry-wit TypeScript bindings generator

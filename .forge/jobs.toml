@@ -9,7 +9,7 @@
 # nandi-testing), DEPOT_TOKEN and DEPOT_PROJECT_ID.
 
 # Toolchain packages from recipes/ (wasi-sdk, wit-bindgen, wasm-tools, the
-# preview1 adapter, wasmtime, jco, perry, qt6-wasi), built with rattler-build. Mentioning `depot`
+# preview1 adapter, wasmtime, jco, perry, perry-component-host, qt6-wasi), built with rattler-build. Mentioning `depot`
 # gets the Depot CLI installed: each build is a `depot build` of
 # ci/build.Dockerfile with persistent cache mounts (packages, sources, ccache
 # for Qt), so a Qt rebuild is incremental. See ci/publish.py.
@@ -44,3 +44,13 @@ branches = ["main"]
 after = "publish-qt2wasm"
 timeout = 1800
 run = "bash ci/check_qt2wasm.sh"
+
+# perry/counter: a Perry GTK4 app that loads the qt2wasm counter component with
+# wasmtime (perry-component-host), from the published packages. See
+# ci/perry_counter.sh.
+[[job]]
+name = "perry-counter"
+branches = ["main"]
+after = "publish-qt2wasm"
+timeout = 1800
+run = "bash ci/perry_counter.sh"
