@@ -1,0 +1,32 @@
+# wasmtime's wasi_snapshot_preview1 reactor adapter (turns a WASI p1 module into
+# a WASI 0.2 component with `wasm-tools component new --adapt`). Installed as
+# $PREFIX/share/wasi-preview1-adapter/wasi_snapshot_preview1.reactor.wasm;
+# activation sets QT2WASM_ADAPTER. Published by ci/publish.py.
+context:
+  version: "36.0.0"
+
+package:
+  name: wasi-preview1-adapter
+  version: ${{ version }}
+
+source:
+  url: https://github.com/bytecodealliance/wasmtime/releases/download/v${{ version }}/wasi_snapshot_preview1.reactor.wasm
+  sha256: 2a0fc96125a6dcef1f969d3ebddedc7e13da3ce71151bbbf40fabcc5d36f8979
+  file_name: wasi_snapshot_preview1.reactor.wasm
+
+build:
+  number: 0
+  noarch: generic
+  script:
+    - install -Dm644 wasi_snapshot_preview1.reactor.wasm $PREFIX/share/wasi-preview1-adapter/wasi_snapshot_preview1.reactor.wasm
+    - mkdir -p $PREFIX/etc/conda/activate.d
+    - echo 'export QT2WASM_ADAPTER="$CONDA_PREFIX/share/wasi-preview1-adapter/wasi_snapshot_preview1.reactor.wasm"' > $PREFIX/etc/conda/activate.d/wasi-preview1-adapter.sh
+
+tests:
+  - script:
+      - test -s $PREFIX/share/wasi-preview1-adapter/wasi_snapshot_preview1.reactor.wasm
+
+about:
+  homepage: https://github.com/bytecodealliance/wasmtime
+  license: Apache-2.0 WITH LLVM-exception
+  summary: wasmtime's wasi_snapshot_preview1 reactor adapter for WASI p1 -> 0.2 components

@@ -1,0 +1,47 @@
+# wasi-sdk (clang/lld + wasi-libc sysroot for wasm32-wasi*), repackaged from the
+# upstream release into $PREFIX/opt/wasi-sdk. Activation sets WASI_SDK_PREFIX.
+# Not on conda-forge. Published to prefix.dev/nandi-testing by ci/publish.py.
+context:
+  version: "27.0"
+  major: "27"
+
+package:
+  name: wasi-sdk
+  version: ${{ version }}
+
+source:
+  url: https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${{ major }}/wasi-sdk-${{ version }}-x86_64-linux.tar.gz
+  sha256: b7d4d944c88503e4f21d84af07ac293e3440b1b6210bfd7fe78e0afd92c23bc2
+
+build:
+  number: 1
+  skip: not (linux and x86_64)
+  # Upstream binaries: keep their $ORIGIN rpaths, don't scan for the prefix.
+  prefix_detection:
+    ignore: true
+  dynamic_linking:
+    binary_relocation: false
+  script:
+    - mkdir -p $PREFIX/opt/wasi-sdk $PREFIX/etc/conda/activate.d $PREFIX/etc/conda/deactivate.d
+    - cp -a bin lib share VERSION $PREFIX/opt/wasi-sdk/
+    # Conda drops empty directories, but clang only adds the libc++ include
+    # path when the (empty) sysroot/include/c++/v1 exists: keep them all.
+    - find $PREFIX/opt/wasi-sdk -type d -empty -exec touch {}/.keep \;
+    - cp $RECIPE_DIR/activate.sh $PREFIX/etc/conda/activate.d/wasi-sdk.sh
+    - cp $RECIPE_DIR/deactivate.sh $PREFIX/etc/conda/deactivate.d/wasi-sdk.sh
+
+tests:
+  - script:
+      - test -f $PREFIX/opt/wasi-sdk/share/cmake/wasi-sdk-p1.cmake
+      - $PREFIX/opt/wasi-sdk/bin/clang --version
+      - printf 'int main(void){return 0;}' > t.c
+      - $PREFIX/opt/wasi-sdk/bin/clang --target=wasm32-wasip1 --sysroot=$PREFIX/opt/wasi-sdk/share/wasi-sysroot t.c -o t.wasm
+      - test -s t.wasm
+      - printf '#include <atomic>\nint main(){std::atomic<int> a{0}; return a;}' > t.cpp
+      - $PREFIX/opt/wasi-sdk/bin/clang++ --target=wasm32-wasip1 -fno-exceptions t.cpp -o t2.wasm
+      - test -s t2.wasm
+
+about:
+  homepage: https://github.com/WebAssembly/wasi-sdk
+  license: Apache-2.0 WITH LLVM-exception
+  summary: WASI-enabled WebAssembly C/C++ toolchain (clang, lld, wasi-libc), in $PREFIX/opt/wasi-sdk

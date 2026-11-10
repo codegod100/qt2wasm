@@ -1,0 +1,64 @@
+# Qt (qtbase: QtCore + QtGui) 6.8.3 for wasm32-wasip1, plus the native host Qt
+# tools (moc, rcc, ...) cross builds need, the WASI toolchain file and compat
+# shims from wasi/ in this repo. Saves the ~30 min qtbase cross-build. Layout:
+#   $PREFIX/opt/qt6-wasi/wasi    static Qt for wasm32-wasip1 (bin/qt-cmake)
+#   $PREFIX/opt/qt6-wasi/host    native qtbase (libexec/moc, QT_HOST_PATH)
+#   $PREFIX/opt/qt6-wasi/cmake   wasi-qt.cmake toolchain (+ Platform/WASI.cmake)
+#   $PREFIX/opt/qt6-wasi/compat  POSIX shims, wasi_compat.c (WASI_QT_COMPAT_C)
+# Activation sets QT_WASI_PREFIX, QT_WASI_HOST_PATH, QT_WASI_TOOLCHAIN and the
+# QT2WASM_* variables. Built and published by ci/publish.py.
+context:
+  version: "6.8.3"
+  qt_path: qt/6.8/6.8.3/submodules/qtbase-everywhere-src-6.8.3.tar.xz
+
+package:
+  name: qt6-wasi
+  version: ${{ version }}
+
+source:
+  - url:
+      - https://download.qt.io/archive/${{ qt_path }}
+      - https://download.qt.io/official_releases/${{ qt_path }}
+      - https://qt.mirror.constant.com/archive/${{ qt_path }}
+      - https://mirrors.ocf.berkeley.edu/qt/archive/${{ qt_path }}
+    sha256: 56001b905601bb9023d399f3ba780d7fa940f3e4861e496a7c490331f49e0b80
+    target_directory: qtbase
+    patches:
+      - ../../wasi/patches/qtbase-6.8.3-wasi.patch
+  - path: ../../wasi
+    target_directory: wasiqt
+
+build:
+  number: 0
+  skip: not (linux and x86_64)
+  script: build.sh
+
+requirements:
+  build:
+    - ${{ compiler('c') }}
+    - ${{ compiler('cxx') }}
+    - cmake >=3.21
+    - ninja
+  host:
+    - wasi-sdk 27.*
+  run:
+    - wasi-sdk 27.*
+    - cmake >=3.21
+    - ninja
+
+tests:
+  - files:
+      recipe:
+        - test/
+    script:
+      - bash test/run.sh
+
+about:
+  homepage: https://fileapi.fastapicloud.dev/forge/#nandi.uk/qt6-wasi
+  license: LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+  summary: Static qtbase (QtCore, QtGui, offscreen QPA) for wasm32-wasip1 with host moc and a WASI toolchain file
+  description: |
+    qtbase 6.8.3 cross-built for wasm32-wasip1 with wasi-sdk 27: static, no
+    threads, offscreen platform plugin, bundled FreeType/HarfBuzz/libpng/zlib,
+    patched for WASI (Q_OS_WASI, no wake-up pipe, setjmp-free rasterisers).
+    See README.md in nandi.uk/qt6-wasi.

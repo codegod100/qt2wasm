@@ -1,0 +1,32 @@
+# wasm-tools 1.239.0, the upstream release binary repackaged into $PREFIX/bin (not on
+# conda-forge). Published to prefix.dev/nandi-testing by ci/publish.py.
+context:
+  version: "1.239.0"
+
+package:
+  name: wasm-tools
+  version: ${{ version }}
+
+source:
+  url: https://github.com/bytecodealliance/wasm-tools/releases/download/v${{ version }}/wasm-tools-${{ version }}-x86_64-linux.tar.gz
+  sha256: be1764c1718a2ed90cdd3e1ed2fe6e4c6b3e2b69fb6ba9a85bcafdca5146a3b9
+
+
+build:
+  number: 0
+  skip: not (linux and x86_64)
+  prefix_detection:
+    ignore: true
+  dynamic_linking:
+    binary_relocation: false
+  script:
+    - install -Dm755 wasm-tools $PREFIX/bin/wasm-tools
+
+tests:
+  - script:
+      - wasm-tools --version
+
+about:
+  homepage: https://github.com/bytecodealliance/wasm-tools
+  license: Apache-2.0 WITH LLVM-exception
+  summary: CLI tools for WebAssembly modules and components

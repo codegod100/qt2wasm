@@ -1,0 +1,2 @@
+export WASI_SDK_PREFIX_BACKUP="${WASI_SDK_PREFIX:-}"
+export WASI_SDK_PREFIX="$CONDA_PREFIX/opt/wasi-sdk"

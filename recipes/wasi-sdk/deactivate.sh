@@ -1,0 +1,2 @@
+if [ -n "${WASI_SDK_PREFIX_BACKUP:-}" ]; then export WASI_SDK_PREFIX="$WASI_SDK_PREFIX_BACKUP"; else unset WASI_SDK_PREFIX; fi
+unset WASI_SDK_PREFIX_BACKUP

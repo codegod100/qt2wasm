@@ -1,0 +1,10 @@
+# fileapi forge CI (runs on Depot). On every push to main: build each recipe in
+# recipes/ with rattler-build and publish the ones whose version/build number
+# isn't on prefix.dev/nandi-testing yet. qt6-wasi builds qtbase twice (host
+# tools + wasm32-wasip1), so allow two hours. See ci/publish.py.
+# Needs the PREFIX_TOKEN secret (a prefix.dev API key; the user secret works).
+[[job]]
+name = "publish"
+branches = ["main"]
+timeout = 7200
+run = "python3 ci/publish.py"

@@ -1,0 +1,32 @@
+# wit-bindgen 0.46.0, the upstream release binary repackaged into $PREFIX/bin (not on
+# conda-forge). Published to prefix.dev/nandi-testing by ci/publish.py.
+context:
+  version: "0.46.0"
+
+package:
+  name: wit-bindgen
+  version: ${{ version }}
+
+source:
+  url: https://github.com/bytecodealliance/wit-bindgen/releases/download/v${{ version }}/wit-bindgen-${{ version }}-x86_64-linux.tar.gz
+  sha256: 8f426d9b0ed0150c71feea697effe4b90b1426a49e22e48bc1d4f4c6396bf771
+
+
+build:
+  number: 0
+  skip: not (linux and x86_64)
+  prefix_detection:
+    ignore: true
+  dynamic_linking:
+    binary_relocation: false
+  script:
+    - install -Dm755 wit-bindgen $PREFIX/bin/wit-bindgen
+
+tests:
+  - script:
+      - wit-bindgen --version
+
+about:
+  homepage: https://github.com/bytecodealliance/wit-bindgen
+  license: Apache-2.0 WITH LLVM-exception
+  summary: Guest language bindings generator for WIT and the component model
