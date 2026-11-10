@@ -387,6 +387,17 @@ def test_checked_in_example_docs_are_current(example, tmp_path):
     assert (d / f"{example}-docs" / "site" / "index.html").exists()
 
 
+def test_find_headers_skips_default_build_dir(tmp_path):
+    from qt2wasm.build import find_headers
+
+    (tmp_path / "a.h").write_text("class A : public QObject { Q_OBJECT };")
+    for d in ("build/qt2wasm/gen", "other/gen"):
+        (tmp_path / d).mkdir(parents=True)
+        (tmp_path / d / "x.h").write_text("class X { Q_OBJECT };")
+    got = find_headers(tmp_path, tmp_path / "other")
+    assert got == [tmp_path / "a.h"]
+
+
 def test_tidy_markdown_for_mkdocs():
     from qt2wasm import mdsite
 

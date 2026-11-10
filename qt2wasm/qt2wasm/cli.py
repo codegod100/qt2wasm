@@ -140,6 +140,12 @@ def main(argv: list[str] | None = None) -> int:
         "(or MkDocs): auto (when one is found, the default), always (required), "
         "none (<name>.md only)",
     )
+    b.add_argument(
+        "--docs-only",
+        action="store_true",
+        help="stop after the docs: moc, qdoc and codegen write <name>.wit, .md, "
+        ".qch and the site, with no compile or link (seconds, not minutes)",
+    )
     b.add_argument("--opt", choices=["size", "speed"], default="size")
     b.add_argument(
         "--lto",

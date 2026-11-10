@@ -172,9 +172,13 @@ _QT_CLASS = re.compile(r"\bQ_(OBJECT|GADGET)\b")
 
 
 def find_headers(project: Path, build: Path) -> list[Path]:
+    """Headers with Q_OBJECT/Q_GADGET, skipping the build dir, the default
+    one (project/build, left over from an earlier build without --build-dir)
+    and dot dirs."""
     out = []
+    skip = {build, project / "build"}
     for h in sorted(project.rglob("*.h")):
-        if build in h.parents or any(
+        if skip & set(h.parents) or any(
             p.name.startswith(".") for p in h.relative_to(project).parents if p.name
         ):
             continue
@@ -452,6 +456,9 @@ def build(args) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     project_qch(args, tools, project, bdir, gen, out)
     project_site(args, tools, wit_dir if args.wit else out.with_suffix(".wit"), out)
+    if getattr(args, "docs_only", False):
+        log(f"docs only: {out.with_suffix('.wit')} and friends in {time.time() - t0:.1f}s")
+        return out.with_suffix(".wit")
     if args.font:
         fonts = [Path(f).resolve() for f in args.font]
         if args.font_subset != "none":

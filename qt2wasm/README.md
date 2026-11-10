@@ -220,8 +220,10 @@ with Zensical or mkdocs-material, else plain `mkdocs` (`--theme` picks one).
 The examples check in their docs, made with Zensical: `examples/<name>/<name>.wit`,
 `<name>.md` and the site project `<name>-docs/` with its built `site/` (see
 [`counter-docs/site/counter.html`](examples/counter/counter-docs/site/counter.html)).
-In this repo `pixi run docs` rebuilds both examples and regenerates all of
-that from the fresh build; without qdoc it keeps the checked-in WITs (the
+`qt2wasm build --docs-only` stops after the docs: moc, qdoc and codegen
+write the `.wit`, `.md`, `.qch` and site in a few seconds, with no compile or
+link. In this repo `pixi run docs` uses it to regenerate all of that for both
+examples (cached on the example sources); without qdoc it keeps the checked-in WITs (the
 build's would have no Qt docs) and says so. A test fails when a `.md` is stale and `pixi run docs-serve` serves the counter site.
 
 qt2wasm tidies wit-bindgen's Markdown for Python-Markdown: wit-bindgen puts
