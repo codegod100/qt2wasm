@@ -30,6 +30,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.request
 from pathlib import Path
 
@@ -114,6 +115,14 @@ def main() -> None:
     env = {**os.environ, "PREFIX_API_KEY": os.environ["PREFIX_TOKEN"]}
     up = [exe, "upload", "prefix", "--channel", CHANNEL, "--skip-existing", *map(str, files)]
     subprocess.run(up, env=env, check=True)
+    # The jobs after this one (qt2wasm-check, perry-counter) solve qt2wasm ==ver
+    # from the channel right away: wait until the index serves it.
+    t0 = time.time()
+    while not published(ver):
+        if time.time() - t0 > 600:
+            sys.exit(f"{NAME} {ver} still not in {CHANNEL}/noarch repodata after 600s")
+        time.sleep(10)
+    say(f"{NAME} {ver} is in the {CHANNEL} index ({int(time.time() - t0)}s)")
     say(f"Done: https://prefix.dev/channels/{CHANNEL}/packages/{NAME}")
 
 
