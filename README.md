@@ -1,82 +1,39 @@
 # qt2wasm
 
-Build Qt C++ into WASI WebAssembly components, plus the prebuilt toolchain that
-needs: Qt for WASI and the wasm tools as conda packages on
-[prefix.dev/nandi-testing](https://prefix.dev/channels/nandi-testing). Everything
-heavy is built once in CI on Depot; installing only downloads packages.
+A Qt 6 to WebAssembly toolchain for **WASI**, built on wasi-sdk. It targets
+desktop and server modules run by a WASI runtime such as wasmtime, not the
+browser: there is no Emscripten here.
 
-## qt6-wasi vs qt2wasm
+Two layers live in this repo:
 
-They live together here, but they are separate conda packages at different layers:
+- **qt6-wasi** is Qt itself: qtbase 6.8.3 cross-compiled for `wasm32-wasip1`
+  (static QtCore + QtGui, offscreen QPA), with host `moc`/`rcc`, a CMake
+  toolchain file and POSIX shims. Build a Qt program with `qt-cmake` and you get
+  an ordinary WASI command module.
+- **qt2wasm** is the tool on top: a Python command that turns a Qt class into a
+  WebAssembly **component**. It reads the class with moc, generates WIT and C++
+  glue from `Q_INVOKABLE`s, properties, signals and enums, links against
+  qt6-wasi and wraps the result with wasm-tools and the preview1 adapter.
 
-- **qt6-wasi** (`recipes/qt6-wasi`) is **Qt itself**: qtbase 6.8.3 cross-compiled
-  for `wasm32-wasip1` (static QtCore + QtGui, offscreen platform), the native
-  host `moc`/`rcc`, a CMake toolchain file and POSIX shims. It is a library
-  package, like `qt6-main` on conda-forge, just for WASI. You use it with plain
-  CMake (`qt-cmake`) and get an ordinary WASI module (a command with `main`),
-  as in [`example/`](example/). It knows nothing about components or WIT. Its
-  siblings in `recipes/` (wasi-sdk, wit-bindgen, wasm-tools, the preview1
-  adapter, the wasmtime CLI) are repackaged upstream tools.
-- **qt2wasm** (`qt2wasm/`) is **the tool on top**: a Python command that takes a
-  Qt CMake project and produces a WebAssembly **component**. It reads your
-  classes with moc, generates the WIT interface and the C++ glue from
-  `Q_INVOKABLE`s, properties, signals and enums, runs `wit-bindgen`, links
-  against qt6-wasi, shrinks with `wasm-opt` and wraps the result with
-  `wasm-tools` and the preview1 adapter. Its runtime gives each component a
-  non-blocking Qt event loop. The qt2wasm package depends on qt6-wasi and the
-  tools above, so installing it brings the whole toolchain.
+## Packages
 
-In short: use **qt6-wasi** to compile Qt code for WASI yourself, and **qt2wasm**
-to turn a Qt class into a component other languages can call. The Qt package is
-slow to build (~30 min) and rarely changes; the tool is pure Python and changes
-often. That is why they publish independently: a qt2wasm change never rebuilds Qt.
+All are linux-64 conda packages on [prefix.dev/nandi-testing](https://prefix.dev/channels/nandi-testing).
 
-| Package | Version | What | Installs |
-| --- | --- | --- | --- |
-| `qt2wasm` | 0.3.0 | the qt2wasm command, its CMake module, headers and runtime (noarch) | `$PREFIX/bin/qt2wasm`, Python package |
-| `qt6-wasi` | 6.8.3 | static QtCore + QtGui (offscreen QPA, bundled FreeType/HarfBuzz/libpng/zlib) for wasm32-wasip1, with the WASI patches; native host Qt tools (moc, rcc); the `wasi-qt.cmake` toolchain and POSIX compat shims | `$PREFIX/opt/qt6-wasi/{wasi,host,cmake,compat}` |
-| `wasi-sdk` | 27.0 | upstream wasi-sdk (clang 20, lld, wasi-libc, libc++) | `$PREFIX/opt/wasi-sdk` |
-| `wit-bindgen` | 0.46.0 | upstream release binary | `$PREFIX/bin` |
-| `wasm-tools` | 1.239.0 | upstream release binary | `$PREFIX/bin` |
-| `wasi-preview1-adapter` | 36.0.0 | wasmtime's `wasi_snapshot_preview1.reactor.wasm` | `$PREFIX/share/wasi-preview1-adapter/` |
-| `wasmtime` | 36.0.0 | the wasmtime CLI, upstream release binary | `$PREFIX/bin` |
+| Package | Version | What |
+| --- | --- | --- |
+| `qt2wasm` | 0.3.0 | the qt2wasm command, CMake module, headers and runtime; depends on everything below |
+| `qt6-wasi` | 6.8.3 | Qt for WASI (`$PREFIX/opt/qt6-wasi`) |
+| `wasi-sdk` | 27.0 | clang 20, lld, wasi-libc, libc++ (`$PREFIX/opt/wasi-sdk`) |
+| `wit-bindgen` | 0.46.0 | upstream binary |
+| `wasm-tools` | 1.239.0 | upstream binary |
+| `wasi-preview1-adapter` | 36.0.0 | wasmtime's `wasi_snapshot_preview1.reactor.wasm` |
+| `wasmtime` | 36.0.0 | the wasmtime CLI |
 
-`wac-cli` 0.12.0 comes from the same channel (built by nandi.uk/qtdev). All linux-64.
+Nothing is compiled when you install: Qt and the tools are prebuilt in CI.
 
+## Install
 
-## Layout
-
-| Path | What |
-| --- | --- |
-| [`qt2wasm/`](qt2wasm/) | the qt2wasm tool, its examples and tests ([README](qt2wasm/README.md)); `qt2wasm/pixi.toml` is its pixi-build package |
-| `recipes/` | rattler-build recipes for qt6-wasi, wasi-sdk, wit-bindgen, wasm-tools, wasi-preview1-adapter, wasmtime |
-| `wasi/` | the WASI patch set and toolchain files the qt6-wasi recipe builds with |
-| [`example/`](example/) | a plain Qt-for-WASI program (no qt2wasm) built against the published qt6-wasi |
-| `pixi.toml` | dev env for qt2wasm: `pixi run test`, `pixi run run`, `pixi run qt2wasm ...` |
-| `ci/`, `.forge/jobs.toml` | CI on Depot: publish the packages, build the example, test qt2wasm |
-
-History: qt6-wasi came from nandi.uk/qt6-wasi and qt2wasm from ditherterm's
-`tools/qt2wasm`; both histories are kept here.
-
-## Example (qt6-wasi without qt2wasm)
-
-[`example/`](example/) is a small QtGui program (QPainter gradients and paths into a
-`QImage`, saved as PNG, with a truecolor preview printed to the terminal), built
-against the published packages. It is a plain WASI command (`main`), so it runs
-with the wasmtime CLI (the `wasmtime` package from `recipes/`, since conda-forge
-only has wasmtime-py):
-
-```sh
-cd example
-pixi run example    # installs qt6-wasi + wasmtime from nandi-testing, builds, runs:
-                    # wasmtime run --dir . build/qt6-wasi-example.wasm qt6-wasi-example.png
-```
-
-`--dir .` preopens the current directory so the program can write the PNG.
-Raster painting needs no `QGuiApplication` or QPA plugin. The `example` forge job
-builds and runs it on every push.
-
-## Use qt6-wasi directly
+With pixi, add the channel and the packages you need:
 
 ```toml
 [workspace]
@@ -84,77 +41,56 @@ channels = ["https://prefix.dev/nandi-testing", "conda-forge"]
 platforms = ["linux-64"]
 
 [dependencies]
-qt6-wasi = "6.8.3.*"        # pulls in wasi-sdk, cmake, ninja
-wit-bindgen = "*"
-wasm-tools = "*"
-wasi-preview1-adapter = "*"
+qt2wasm = "*"     # the whole toolchain
+# or just Qt for WASI:
+# qt6-wasi = "6.8.3.*"
+# wasmtime = "36.*"
 ```
 
-Activation sets `WASI_SDK_PREFIX`, `QT_WASI_PREFIX`, `QT_WASI_HOST_PATH`, `QT_WASI_TOOLCHAIN`,
-and the `QT2WASM_*` variables qt2wasm reads (`QT2WASM_QT_PREFIX`, `QT2WASM_QT_TOOLCHAIN`,
-`QT2WASM_MOC`, `QT2WASM_ADAPTER`). Configure a Qt project with
+Activation sets `QT_WASI_PREFIX`, `WASI_SDK_PREFIX`, `QT_WASI_TOOLCHAIN` and the
+`QT2WASM_*` variables. Configure a plain Qt project with
+`$QT_WASI_PREFIX/bin/qt-cmake -S . -B build -G Ninja`. For components, see
+[qt2wasm/README.md](qt2wasm/README.md).
+
+## Run the example
+
+[`example/`](example/) is a small QPainter program built against the published
+packages:
 
 ```sh
-$QT_WASI_PREFIX/bin/qt-cmake -S . -B build -G Ninja
+cd example
+pixi run example
 ```
 
-and add `${WASI_QT_COMPAT_C}` (set by the toolchain) to the final module's sources. See
-`recipes/qt6-wasi/test/` for the smallest working project, and ditherterm's
-`wasm/qt/guest` or qt2wasm for components.
+This installs qt6-wasi and wasmtime, builds `build/qt6-wasi-example.wasm`, and
+runs it with `wasmtime run --dir . ...`. It prints a truecolor preview and writes
+`qt6-wasi-example.png`.
 
-## What it takes to run Qt on WASI
+## CI
 
-`wasi/` holds everything the cross build needs:
+`.forge/jobs.toml` runs on Depot on every push to main:
 
-- `cmake/wasi-qt.cmake`: wraps wasi-sdk's `wasi-sdk-p1.cmake`, forces `UNIX=1` (our
-  `Platform/WASI.cmake`, plus `wasi-unix.cmake` for CMake 4, which ships its own WASI
-  platform file), force-includes `compat/wasi_compat.h`, links wasi-libc's emulated
-  signal/mman/process-clock/getpid libraries.
-- `mkspecs/wasi-clang`: a minimal POSIX `qplatformdefs.h`.
-- `patches/qtbase-6.8.3-wasi.patch`: `Q_OS_WASI` detection, no thread wake-up pipe in the
-  unix event dispatcher, and setjmp-free overflow handling in `qgrayraster.c` / FreeType
-  `ftgrays.c` (wasi-libc has no `setjmp`/`longjmp` without the EH proposal).
-- `compat/`: stubs and headers wasi-libc lacks (`geteuid`, `dup2`, `pipe`, `sys/wait.h`,
-  `pwd.h`, a trapping `setjmp.h`, ...); `wasi_compat.c` is linked into the final module.
-- `configure-wasi.sh`: the qtbase feature set (static, no threads, no processes,
-  dlopen, sockets or display server).
+| Job | What |
+| --- | --- |
+| `publish-toolchain` | `ci/publish.py`: rattler-build each recipe in `recipes/` and upload it to nandi-testing |
+| `publish-qt2wasm` | `qt2wasm/ci/publish_conda.py`: build and upload the qt2wasm package |
+| `example` | `ci/example.sh`: build and run `example/` |
+| `qt2wasm-check` | `ci/check_qt2wasm.sh`: qt2wasm tests and examples, from source and from the published package |
 
-Limits: single-threaded; no `QProcess`, plugins at runtime, network or filesystem
-preopens; PNG decode errors trap; C++ exceptions abort.
+A package is skipped when its name, version and build number are already
+published, so to rebuild one, bump its `build.number` or version. Builds run via
+`depot build` with cache mounts (including ccache for Qt), so a Qt rebuild after a
+small patch is incremental. Secrets: `PREFIX_TOKEN`, `DEPOT_TOKEN`, `DEPOT_PROJECT_ID`.
 
-## CI: build and publish
+## Layout
 
-`.forge/jobs.toml` runs four jobs on Depot on every push to main:
+| Path | What |
+| --- | --- |
+| `qt2wasm/` | the tool, its examples and tests |
+| `recipes/` | rattler-build recipes for the packages above |
+| `wasi/` | the qtbase WASI patch, toolchain files, compat shims and configure script |
+| `example/` | plain Qt-for-WASI example (no qt2wasm) |
+| `ci/`, `.forge/` | CI scripts and jobs |
 
-| Job | What | Skips when |
-| --- | --- | --- |
-| `publish-toolchain` | `ci/publish.py`: rattler-build each recipe in `recipes/`, upload to nandi-testing | that name + version + build number is already published |
-| `publish-qt2wasm` | `qt2wasm/ci/publish_conda.py`: pixi-build the qt2wasm package, upload (after the toolchain) | that qt2wasm version is already published |
-| `example` | `ci/example.sh`: build `example/` and run it with the wasmtime CLI | never (about a minute) |
-| `qt2wasm-check` | `ci/check_qt2wasm.sh`: qt2wasm tests and examples from the checkout, then with the published package | never |
-
-The forge has no path filters and checks out without `.git`, so "only build
-what changed" works by version: bump `build.number` (or `version`) in a recipe,
-or the version in `qt2wasm/pixi.toml` + `qt2wasm/pyproject.toml`, to publish
-again. Everything else is skipped.
-
-**Incremental builds.** The publish jobs run their builds with `depot build`
-(ci/build.Dockerfile, qt2wasm/ci/Dockerfile) and BuildKit cache mounts, which
-Depot keeps between runs: the conda package caches, rattler-build's source
-cache (the qtbase tarball) and **ccache** for the Qt build (`recipes/qt6-wasi/build.sh`
-turns it on when the cache is mounted, with paths made relative so each build's
-work dir still hits). The first Qt build after this was set up fills the cache;
-from then on a rebuild after a small patch change mostly comes from ccache instead
-of a full ~30 min compile. The job log ends with ccache's
-hit/miss counts. Without the Depot CLI, `ci/publish.py` builds in place, uncached.
-
-Locally (needs the qtbase tarball to be reachable):
-
-```sh
-rattler-build build -r recipes/qt6-wasi -c https://prefix.dev/nandi-testing -c conda-forge
-```
-
-Build notes: the static Qt bakes its install prefix into a 256-byte buffer, which
-conda's placeholder prefix overflows, so the wasm Qt is installed to a short staging
-path and moved into `$PREFIX`; conda drops empty directories, so the wasi-sdk recipe
-keeps them (clang only finds libc++ when `include/c++/v1` exists).
+Limits of Qt on WASI: single-threaded; no `QProcess`, runtime plugins or
+network; C++ exceptions abort.
