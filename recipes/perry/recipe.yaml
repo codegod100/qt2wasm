@@ -6,10 +6,11 @@
 # The prebuilt compiler, runtime/stdlib/GTK4/wasm-host archives and the native
 # extension pack (node:http, net, ws, zlib, ...) come from npm, so a compile
 # never downloads anything. Everything Perry links against comes from
-# conda-forge: GTK4, libshumate, GStreamer, PulseAudio, libsoup and the conda
-# C toolchain (gcc_linux-64 + sysroot). WebKitGTK 6 (Perry's WebView) is not on
-# conda-forge, so build.sh compiles static stub archives for it that abort with
-# a message if a WebView is ever created; every other widget works.
+# conda-forge: GTK4, GStreamer, PulseAudio, libsoup and the conda C toolchain
+# (gcc_linux-64 + sysroot). WebKitGTK 6 (Perry's WebView) is not on conda-forge
+# and libshumate (MapView) does not solve next to nandi-testing, so build.sh
+# compiles static stub archives for both that abort with a message if a
+# WebView or MapView is ever created; every other widget works.
 #
 # $PREFIX/bin/perry is a wrapper (perry-wrapper.sh) that puts the conda
 # toolchain and libraries on Perry's link line, with an rpath to this env.
@@ -43,7 +44,6 @@ requirements:
     - gcc_linux-64
     - pkg-config
     - gtk4 >=4.14
-    - libshumate
     - gstreamer
     - gst-plugins-base
     - pulseaudio-client

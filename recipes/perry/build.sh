@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install Perry and its extension pack from npm, compile the WebKitGTK stubs,
+# Install Perry and its extension pack from npm, compile the WebKitGTK/libshumate stubs,
 # install the wrapper. See recipe.yaml.
 set -euxo pipefail
 V=$PKG_VERSION
@@ -19,33 +19,43 @@ rm -f "$PREFIX/bin/perry"
 sed "s|@NATIVE@|$rel|" "$RECIPE_DIR/perry-wrapper.sh" > "$PREFIX/bin/perry"
 chmod 0755 "$PREFIX/bin/perry"
 
-# WebKitGTK 6 / JavaScriptCoreGTK 6 stubs: every webkit_*/jsc_* symbol the
-# GTK4 UI archive references, as a function that aborts with a message.
+# WebKitGTK 6 / JavaScriptCoreGTK 6 / libshumate stubs: every webkit_*/jsc_*/
+# shumate_* symbol the GTK4 UI archive references, as a function that aborts
+# with a message. (WebKitGTK 6 is not on conda-forge; libshumate is, but it
+# drags in protobuf-c -> libabseil, which nandi-testing shadows, so the env
+# would not solve with nandi-testing ahead of conda-forge.)
 stubs=$PREFIX/lib/perry/stubs
 mkdir -p "$stubs/pkgconfig"
 work=$(mktemp -d)
 zstd -dq "$native/lib/libperry_ui_gtk4.a.zst" -o "$work/ui.a"
-"${NM:-nm}" "$work/ui.a" 2>/dev/null | awk '$1=="U"{print $2}' | grep -E '^(webkit_|jsc_)' | sort -u > "$work/syms"
+"${NM:-nm}" "$work/ui.a" 2>/dev/null | awk '$1=="U"{print $2}' | grep -E '^(webkit_|jsc_|shumate_)' | sort -u > "$work/syms"
 test -s "$work/syms"
 {
     echo '#include <stdio.h>'
     echo '#include <stdlib.h>'
-    echo 'static void perry_no_webkit(const char *f) {'
-    echo '    fprintf(stderr, "perry: %s: WebKitGTK is not available in the conda perry package (WebView is stubbed out)\n", f);'
+    echo 'static void perry_stubbed(const char *f) {'
+    echo '    fprintf(stderr, "perry: %s: not available in the conda perry package (WebView and MapView are stubbed out)\n", f);'
     echo '    abort();'
     echo '}'
-    while read -r s; do echo "void $s(void) { perry_no_webkit(\"$s\"); }"; done < "$work/syms"
-} > "$work/webkit_stub.c"
-$CC -O1 -fPIC -c "$work/webkit_stub.c" -o "$work/webkit_stub.o"
-for lib in webkitgtk-6.0 javascriptcoregtk-6.0; do
-    "${AR:-ar}" rcs "$stubs/lib$lib.a" "$work/webkit_stub.o"
+    while read -r s; do echo "void $s(void) { perry_stubbed(\"$s\"); }"; done < "$work/syms"
+} > "$work/stub.c"
+$CC -O1 -fPIC -c "$work/stub.c" -o "$work/stub.o"
+for lib in webkitgtk-6.0 javascriptcoregtk-6.0 shumate-1.0; do
+    "${AR:-ar}" rcs "$stubs/lib$lib.a" "$work/stub.o"
 done
-# So `pkg-config webkitgtk-6.0` succeeds (Perry warns otherwise).
+# So `pkg-config webkitgtk-6.0` / `shumate-1.0` succeed (Perry warns otherwise).
 cat > "$stubs/pkgconfig/webkitgtk-6.0.pc" <<PC
 Name: webkitgtk-6.0
 Description: stub (conda perry package; WebView aborts)
 Version: 2.0.0
 Libs: -lwebkitgtk-6.0 -ljavascriptcoregtk-6.0
+Cflags:
+PC
+cat > "$stubs/pkgconfig/shumate-1.0.pc" <<PC
+Name: shumate-1.0
+Description: stub (conda perry package; MapView aborts)
+Version: 1.0.0
+Libs: -lshumate-1.0
 Cflags:
 PC
 rm -rf "$work"
