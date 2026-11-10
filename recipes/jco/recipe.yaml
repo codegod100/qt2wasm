@@ -1,0 +1,42 @@
+# jco 1.41.0 (@bytecodealliance/jco from npm) on conda-forge nodejs: the
+# JavaScript toolchain for WebAssembly components (`jco transpile` turns a
+# component into ES modules + .d.ts; also componentize, wit, types, run).
+# Neither conda-forge nor nandi-testing has it. qt2wasm depends on it to emit
+# JS bindings next to each component. npm installs the pinned release into
+# $PREFIX/lib/node_modules; the bin is $PREFIX/bin/jco. Some npm deps ship
+# native linux-x64 binaries (rolldown, jco-node-fs), so this is linux-64, not
+# noarch. Published to prefix.dev/nandi-testing by ci/publish.py.
+context:
+  version: "1.41.0"
+
+package:
+  name: jco
+  version: ${{ version }}
+
+build:
+  number: 0
+  skip: not (linux and x86_64)
+  prefix_detection:
+    ignore: true
+  dynamic_linking:
+    binary_relocation: false
+  script:
+    - npm install --global --no-audit --no-fund --prefix "$PREFIX" "@bytecodealliance/jco@${{ version }}"
+    - test -x "$PREFIX/bin/jco"
+
+requirements:
+  build:
+    - nodejs >=20
+  run:
+    - nodejs >=20
+
+tests:
+  - script:
+      - jco --version
+      - test "$(jco --version)" = "${{ version }}"
+      - test -f "$PREFIX/lib/node_modules/@bytecodealliance/jco/node_modules/@bytecodealliance/preview2-shim/package.json"
+
+about:
+  homepage: https://github.com/bytecodealliance/jco
+  license: Apache-2.0 WITH LLVM-exception
+  summary: JavaScript toolchain for WebAssembly components (jco transpile, componentize, wit)

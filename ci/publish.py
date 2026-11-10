@@ -3,6 +3,7 @@ rattler-build and publish them to prefix.dev/nandi-testing.
 
 Packages, in build order (later ones may depend on earlier ones):
   wasi-sdk, wit-bindgen, wasm-tools, wasi-preview1-adapter, wasmtime  repackaged upstream releases
+  jco                                                                 @bytecodealliance/jco from npm on conda-forge nodejs
   qt6-wasi                                                            qtbase 6.8.3 for wasm32-wasip1 (~30+ min)
 
 For each recipe: if nandi-testing already has that name + version + build
@@ -40,7 +41,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 RECIPES = HERE.parent / "recipes"
-ORDER = ["wasi-sdk", "wit-bindgen", "wasm-tools", "wasi-preview1-adapter", "wasmtime", "qt6-wasi"]
+ORDER = ["wasi-sdk", "wit-bindgen", "wasm-tools", "wasi-preview1-adapter", "wasmtime", "jco", "qt6-wasi"]
 CHANNEL = "nandi-testing"
 CHANNEL_URL = f"https://prefix.dev/{CHANNEL}"
 UA = {"User-Agent": "qt2wasm-ci/1"}

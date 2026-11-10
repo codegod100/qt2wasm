@@ -89,6 +89,7 @@ depends-on = [
   { task = "build-pkg", args = ["wasm-tools"] },
   { task = "build-pkg", args = ["wasi-preview1-adapter"] },
   { task = "build-pkg", args = ["wasmtime"] },
+  { task = "build-pkg", args = ["jco"] },
 ]
 
 [tasks.build-qt2wasm]
