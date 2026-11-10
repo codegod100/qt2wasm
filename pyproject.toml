@@ -1,7 +1,12 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "qt2wasm"
 version = "0.1.0"
 description = "Build Qt C++ into WASI WebAssembly components"
+readme = "README.md"
 requires-python = ">=3.10"
 
 [project.optional-dependencies]
@@ -11,5 +16,12 @@ test = ["pytest", "wasmtime"]
 [project.scripts]
 qt2wasm = "qt2wasm.cli:main"
 
-[tool.setuptools]
+[tool.hatch.build.targets.wheel]
 packages = ["qt2wasm"]
+
+# The CMake module, headers and runtime sources the build driver needs,
+# installed next to the Python code (qt2wasm/_data/...).
+[tool.hatch.build.targets.wheel.force-include]
+"cmake" = "qt2wasm/_data/cmake"
+"include" = "qt2wasm/_data/include"
+"runtime" = "qt2wasm/_data/runtime"

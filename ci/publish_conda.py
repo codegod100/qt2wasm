@@ -1,0 +1,107 @@
+"""fileapi forge job: build the qt2wasm conda package on Depot with pixi-build
+and publish it to prefix.dev/nandi-testing.
+
+Runs from .forge/jobs.toml on the forge runner (python3 and the Depot CLI, no
+curl or Docker):
+
+1. Read the version from tools/qt2wasm/pixi.toml. If nandi-testing already has
+   qt2wasm at that version, stop: bump the version to publish again.
+2. `depot build` tools/qt2wasm/ci/Dockerfile, which runs `pixi build` and
+   exports the .conda file to ./dist.
+3. Upload it with `pixi upload prefix` (pixi fetched from its GitHub release).
+
+Secrets (user secrets work): PREFIX_TOKEN, a prefix.dev API key with write
+access to nandi-testing; DEPOT_TOKEN; DEPOT_PROJECT_ID.
+"""
+
+from __future__ import annotations
+
+import io
+import json
+import os
+import re
+import subprocess
+import sys
+import tarfile
+import tempfile
+import urllib.request
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+PKG = HERE.parent  # tools/qt2wasm
+CHANNEL = "nandi-testing"
+NAME = "qt2wasm"
+UA = {"User-Agent": "qt2wasm-ci/1"}
+
+
+def say(*a):
+    print(*a, flush=True)
+
+
+def version() -> str:
+    m = re.search(r'^\[package\][^\[]*?^version\s*=\s*"([^"]+)"', (PKG / "pixi.toml").read_text(), re.MULTILINE | re.DOTALL)
+    if not m:
+        sys.exit("no [package] version in tools/qt2wasm/pixi.toml")
+    return m.group(1)
+
+
+def published(ver: str) -> bool:
+    url = f"https://prefix.dev/{CHANNEL}/noarch/repodata.json"
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60) as r:
+            data = json.load(r)
+    except (OSError, ValueError) as e:  # a missing or unreachable channel index: just build
+        say(f"could not read {url} ({e}); building anyway")
+        return False
+    pkgs = {**data.get("packages", {}), **data.get("packages.conda", {})}
+    return any(p.get("name") == NAME and p.get("version") == ver for p in pkgs.values())
+
+
+def pixi() -> str:
+    bin_dir = Path(tempfile.mkdtemp())
+    url = f"https://github.com/prefix-dev/pixi/releases/latest/download/pixi-{os.uname().machine}-unknown-linux-musl.tar.gz"
+    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=300) as r:
+        data = r.read()
+    with tarfile.open(fileobj=io.BytesIO(data)) as tf:
+        tf.extractall(bin_dir, filter="data")
+    exe = bin_dir / "pixi"
+    exe.chmod(0o755)
+    return str(exe)
+
+
+def main() -> None:
+    for var in ("PREFIX_TOKEN", "DEPOT_TOKEN"):
+        if not os.environ.get(var):
+            sys.exit(f"{var} secret is not set (a user or repo secret in fileapi)")
+    ver = version()
+    if published(ver):
+        say(f"{NAME} {ver} is already on {CHANNEL}; nothing to do. Bump the version in "
+            "tools/qt2wasm/pixi.toml and pyproject.toml to publish again.")
+        return
+
+    dist = PKG / "dist"
+    cmd = ["depot", "build", "--progress", "plain", "--platform", "linux/amd64",
+           "-f", str(HERE / "Dockerfile"), "--output", f"type=local,dest={dist}", str(PKG)]
+    if os.environ.get("DEPOT_PROJECT_ID"):
+        cmd[2:2] = ["--project", os.environ["DEPOT_PROJECT_ID"]]
+    say("$ " + " ".join(cmd))
+    log = PKG / "depot.log"
+    with open(log, "wb") as f:
+        code = subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, check=False).returncode
+    lines = log.read_text("utf-8", "replace").splitlines()
+    say("\n".join(lines[-80:]))  # the job keeps only the tail of its output
+    if code != 0:
+        sys.exit(f"depot build failed (exit {code})")
+
+    files = sorted(dist.glob("*.conda"))
+    if not files:
+        sys.exit(f"depot build produced no .conda in {dist}")
+    say("Built: " + ", ".join(f"{p.name} ({p.stat().st_size} B)" for p in files))
+    env = {**os.environ, "PREFIX_API_KEY": os.environ["PREFIX_TOKEN"]}
+    up = [pixi(), "upload", "prefix", "--channel", CHANNEL, "--skip-existing", *map(str, files)]
+    subprocess.run(up, env=env, check=True)
+    say(f"Done: https://prefix.dev/channels/{CHANNEL}/packages/{NAME}")
+
+
+if __name__ == "__main__":
+    main()
