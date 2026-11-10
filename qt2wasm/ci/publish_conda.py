@@ -13,6 +13,8 @@ between runs; otherwise it builds in place.
 2. `pixi build` the package into qt2wasm/dist.
 3. Upload it with `pixi upload prefix` (pixi fetched from its GitHub release).
 
+`--status` only reports whether this version is already published (no token).
+
 Secrets (user secrets work): PREFIX_TOKEN, a prefix.dev API key with write
 access to nandi-testing (DEPOT_TOKEN and DEPOT_PROJECT_ID for a remote build).
 """
@@ -74,6 +76,10 @@ def pixi() -> str:
 
 
 def main() -> None:
+    if "--status" in sys.argv[1:]:  # no token needed
+        ver = version()
+        say(f"{NAME:24} {ver:10} " + ("published" if published(ver) else "NOT published (CI will build it)"))
+        return
     for var in ("PREFIX_TOKEN",):
         if not os.environ.get(var):
             sys.exit(f"{var} secret is not set (a user or repo secret in fileapi)")

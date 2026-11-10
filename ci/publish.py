@@ -20,6 +20,7 @@ the qt6-wasi build uses. A Qt rebuild then mostly hits ccache. Without depot it
 builds in place, uncached.
 
   python3 ci/publish.py [recipe ...]   # default: all, in order
+  python3 ci/publish.py --status       # which recipes are already published (no token needed)
 
 Secret: PREFIX_TOKEN, a prefix.dev API key with write access to nandi-testing.
 """
@@ -119,10 +120,21 @@ def build(exe: str, recipe: str, out: Path) -> list[Path]:
     return sorted(set(out.rglob("*.conda")) - before)
 
 
+def status(wanted: list[str]) -> None:
+    for recipe in wanted:
+        name, version, number, subdir = meta(recipe)
+        state = "published" if published(name, version, number, subdir) else "NOT published (CI will build it)"
+        say(f"{name:24} {version:10} build {number}  {state}")
+
+
 def main() -> None:
+    args = sys.argv[1:]
+    if "--status" in args:
+        status([a for a in args if a != "--status"] or ORDER)
+        return
     if not os.environ.get("PREFIX_TOKEN"):
         sys.exit("PREFIX_TOKEN secret is not set (a user or repo secret in fileapi)")
-    wanted = sys.argv[1:] or ORDER
+    wanted = args or ORDER
     todo = []
     for recipe in wanted:
         name, version, number, subdir = meta(recipe)

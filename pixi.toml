@@ -1,13 +1,21 @@
 # Development environment for qt2wasm: the published toolchain packages (built
-# from recipes/ in this repo), Python, wasmtime-py and pytest. qt2wasm itself
-# runs from the qt2wasm/ checkout, so tests always check the code you changed.
-# Nothing is compiled at install time.
-#   pixi run test        codegen tests + build and run both examples
-#   pixi run run         build the examples and run them under wasmtime
+# from recipes/ in this repo), Python, wasmtime-py, pytest, rattler-build and
+# just. qt2wasm itself runs from the qt2wasm/ checkout, so tests always check the
+# code you changed. Nothing is compiled at install time.
+#
+# Every command is a pixi task below; the justfile only aliases them
+# (`just test` == `pixi run --frozen test`). Tasks chain with depends-on.
+#   pixi run test             codegen tests + build and run both examples
+#   pixi run run              build the examples and run them under wasmtime
+#   pixi run example          build and run example/ (plain Qt-for-WASI program)
+#   pixi run build-pkg wasm-tools   rattler-build one recipe into out/
+#   pixi run build-qt2wasm    pixi-build the qt2wasm package into qt2wasm/dist/
+#   pixi run publish-status   what CI would still publish to nandi-testing
 #   pixi run qt2wasm build path/to/project -o app.wasm
 # The qt2wasm conda package itself is qt2wasm/pixi.toml (pixi-build); the
 # toolchain packages are recipes/ (rattler-build); example/ is a plain Qt-for-WASI
-# program without qt2wasm. CI for all of them: .forge/jobs.toml.
+# program without qt2wasm. CI for all of them: .forge/jobs.toml, on Depot. Qt
+# (qt6-wasi) is built there, never locally by default.
 [workspace]
 name = "qt2wasm-dev"
 channels = ["conda-forge", "https://prefix.dev/nandi-testing"]
@@ -22,6 +30,8 @@ fonttools = "*"
 pytest = "*"
 wasmtime-py = ">=40"
 font-ttf-dejavu-sans-mono = "*"
+rattler-build = "*"
+just = "*"
 qt6-wasi = { version = "6.8.3.*", channel = "https://prefix.dev/nandi-testing" }
 wit-bindgen = { version = "0.46.*", channel = "https://prefix.dev/nandi-testing" }
 wasm-tools = { version = "1.239.*", channel = "https://prefix.dev/nandi-testing" }
@@ -50,3 +60,61 @@ description = "qt2wasm tests: codegen, WIT validation and the built examples"
 cmd = "python -m pytest -q qt2wasm/tests"
 depends-on = ["examples"]
 env = { QT2WASM_TEST_COUNTER = "$PIXI_PROJECT_ROOT/qt2wasm/build/counter.wasm", QT2WASM_TEST_CANVAS = "$PIXI_PROJECT_ROOT/qt2wasm/build/canvas.wasm" }
+
+# --- packages --------------------------------------------------------------
+
+[tasks.build-pkg]
+description = "rattler-build one recipe from recipes/ into out/, e.g. `pixi run build-pkg wasm-tools` (qt6-wasi is a long Qt compile: CI builds it)"
+args = ["recipe"]
+cmd = "rattler-build build --recipe recipes/{{ recipe }} --output-dir out -c https://prefix.dev/nandi-testing -c conda-forge"
+
+[tasks.build-toolchain]
+description = "Build the light toolchain packages into out/ (everything in recipes/ but qt6-wasi)"
+depends-on = [
+  { task = "build-pkg", args = ["wasi-sdk"] },
+  { task = "build-pkg", args = ["wit-bindgen"] },
+  { task = "build-pkg", args = ["wasm-tools"] },
+  { task = "build-pkg", args = ["wasi-preview1-adapter"] },
+  { task = "build-pkg", args = ["wasmtime"] },
+]
+
+[tasks.build-qt2wasm]
+description = "pixi-build the qt2wasm conda package into qt2wasm/dist/"
+cmd = "\"$PIXI_EXE\" build --path qt2wasm/pixi.toml --output-dir qt2wasm/dist"
+inputs = ["qt2wasm/pixi.toml", "qt2wasm/pyproject.toml", "qt2wasm/qt2wasm/**", "qt2wasm/cmake/**", "qt2wasm/include/**", "qt2wasm/runtime/**"]
+outputs = ["qt2wasm/dist/*.conda"]
+
+[tasks.build-all]
+description = "Build every package except qt6-wasi"
+depends-on = ["build-toolchain", "build-qt2wasm"]
+
+# --- example/ --------------------------------------------------------------
+
+[tasks.example]
+description = "Build and run example/ (its own pixi env: published qt6-wasi + wasmtime); writes example/qt6-wasi-example.png"
+cmd = "\"$PIXI_EXE\" run --manifest-path example/pixi.toml example"
+
+# --- publishing (prefix.dev/nandi-testing) ---------------------------------
+# CI publishes on every push to main (.forge/jobs.toml). These run the same
+# scripts here; they need PREFIX_TOKEN (a prefix.dev API key with write access
+# to nandi-testing) and skip whatever is already published.
+
+[tasks.publish-status]
+description = "Which packages (name + version + build) are already on nandi-testing; no token needed"
+cmd = "python ci/publish.py --status && python qt2wasm/ci/publish_conda.py --status"
+
+[tasks.publish-toolchain]
+description = "Build and upload the unpublished recipes/ packages (needs PREFIX_TOKEN)"
+cmd = "python ci/publish.py"
+
+[tasks.publish-qt2wasm]
+description = "Build and upload the qt2wasm package if its version is new (needs PREFIX_TOKEN)"
+cmd = "python qt2wasm/ci/publish_conda.py"
+
+[tasks.publish]
+description = "publish-toolchain, then publish-qt2wasm (needs PREFIX_TOKEN)"
+cmd = "python ci/publish.py && python qt2wasm/ci/publish_conda.py"
+
+[tasks.clean]
+description = "Remove build output (out/, qt2wasm/build, qt2wasm/dist, example/build)"
+cmd = "rm -rf out qt2wasm/build qt2wasm/dist qt2wasm/build.log example/build example/qt6-wasi-example.png"

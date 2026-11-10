@@ -52,6 +52,22 @@ Activation sets `QT_WASI_PREFIX`, `WASI_SDK_PREFIX`, `QT_WASI_TOOLCHAIN` and the
 `$QT_WASI_PREFIX/bin/qt-cmake -S . -B build -G Ninja`. For components, see
 [qt2wasm/README.md](qt2wasm/README.md).
 
+## Working in this repo
+
+Every command is a pixi task in [`pixi.toml`](pixi.toml), and the
+[`justfile`](justfile) aliases them (`just test` is `pixi run --frozen test`).
+Run `just` for the list. The main ones:
+
+| Command | What |
+| --- | --- |
+| `just setup` | install the dev env (prebuilt packages only, nothing compiled) |
+| `just test` / `just run` | qt2wasm tests; build and run the counter and canvas examples |
+| `just example` | build and run `example/` |
+| `just build <recipe>` | rattler-build one recipe into `out/` (qt6-wasi is left to CI) |
+| `just build-toolchain` / `just build-qt2wasm` / `just build-all` | build the packages locally |
+| `just status` | which package versions are already on nandi-testing |
+| `just publish` | upload what isn't published yet (needs `PREFIX_TOKEN`); CI does this on push |
+
 ## Run the example
 
 [`example/`](example/) is a small QPainter program built against the published
