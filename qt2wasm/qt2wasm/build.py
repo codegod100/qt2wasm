@@ -8,9 +8,10 @@ Steps (each logged with its time):
   3. codegen             Qt-first: WIT + C++ glue from the metatypes, with
                          the Qt doc comments as WIT /// docs when qdoc is
                          found (--docs). The WIT is also written next to
-                         the component as <name>.wit, and, when qdoc and
-                         qhelpgenerator are found, the Qt Help file
-                         <name>.qch (--qch).
+                         the component as <name>.wit, as Markdown
+                         (wit-bindgen markdown) as <name>.md, and, when
+                         qdoc and qhelpgenerator are found, the Qt Help
+                         file <name>.qch (--qch).
                          WIT-first (--wit): bindings only, you implement them.
   4. cmake               configure + build with the Qt WASI toolchain file
   5. optimise            wasm-opt on the core module (keeps the WIT section)
@@ -406,6 +407,14 @@ def build(args) -> Path:
     if not args.wit:
         out.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(wit_dir / "component.wit", out.with_suffix(".wit"))
+        from qt2wasm import mdsite
+
+        mdsite.markdown(
+            out.with_suffix(".wit"),
+            out.parent,
+            name=out.stem,
+            wit_bindgen=tools.wit_bindgen,
+        )
     out.parent.mkdir(parents=True, exist_ok=True)
     project_qch(args, tools, project, bdir, gen, out)
     if args.font:

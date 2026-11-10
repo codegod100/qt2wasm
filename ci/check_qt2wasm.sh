@@ -9,6 +9,7 @@ pixi --version
 pixi install
 pixi run test
 pixi run run
+pixi run docs
 
 v=$(sed -n 's/^version = "\(.*\)"/\1/p' qt2wasm/pixi.toml)
 font=$(ls .pixi/envs/default/fonts/DejaVuSans*.ttf | head -n 1)

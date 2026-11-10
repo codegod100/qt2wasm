@@ -35,7 +35,7 @@ channels = ["conda-forge", "https://prefix.dev/nandi-testing"]
 platforms = ["linux-64"]
 
 [dependencies]
-qt2wasm = { version = "0.4.*", channel = "https://prefix.dev/nandi-testing" }
+qt2wasm = { version = "0.6.*", channel = "https://prefix.dev/nandi-testing" }
 ```
 
 then `pixi run qt2wasm build path/to/project -o app.wasm` (add `--font some.ttf`
@@ -183,6 +183,32 @@ qhelpgenerator comes from qttools too: on Debian or Ubuntu, `apt install
 qt6-tools-dev-tools` gives `/usr/lib/qt6/libexec/qhelpgenerator` (6.4 tested),
 or set `QT2WASM_QHELPGENERATOR`.
 
+### Docs site: WIT -> Markdown -> MkDocs
+
+`qt2wasm build` also writes `<name>.md` next to the `.wasm` and `.wit`: the
+WIT as Markdown, from `wit-bindgen markdown`, so the qdoc prose is in it.
+To turn one or more WITs into a docs site:
+
+```sh
+qt2wasm markdown app.wit -o docs/           # just the Markdown page
+qt2wasm mkdocs app.wit -o app-docs --build  # mkdocs.yml + docs/ + site/
+```
+
+`mkdocs` writes an MkDocs project (one page per WIT plus an overview, named
+after the WIT package) and with `--build` runs `mkdocs build` into
+`app-docs/site/`; leave `--build` out to `mkdocs serve` or edit the config
+first. It uses the Material theme when `mkdocs-material` is installed and the
+plain `mkdocs` theme otherwise (`--theme` picks one). MkDocs is not a
+dependency of the package: install `mkdocs` (and `mkdocs-material`) from
+conda-forge. In this repo `pixi run docs` builds the counter example's site
+into `qt2wasm/build/counter-docs/site/` and `pixi run docs-serve` serves it.
+[`examples/counter/counter.md`](examples/counter/counter.md) is the checked-in
+Markdown for the sample WIT.
+
+qt2wasm tidies wit-bindgen's Markdown for Python-Markdown: wit-bindgen puts
+enum-case and field docs after a bare `<p>`, which MkDocs would read as a raw
+HTML block that swallows the rest of the page.
+
 ## Writing a component (WIT-first)
 
 `qt2wasm build PROJECT --wit path/to/wit --world my-world` skips the WIT and
@@ -217,6 +243,7 @@ one.
 | fontTools (optional, subsetting) | Python | 4.x |
 | qdoc (optional, WIT docs) | `QT2WASM_QDOC`, `PATH`, `/usr/lib/qt6/bin/qdoc` | 6.4 |
 | qhelpgenerator (optional, `.qch`) | `QT2WASM_QHELPGENERATOR`, `PATH`, `/usr/lib/qt6/libexec/qhelpgenerator` | 6.4 |
+| mkdocs (optional, `qt2wasm mkdocs --build`) | `PATH`, Python | 1.6, mkdocs-material 9.x |
 
 ## Measured (2026-11-09)
 

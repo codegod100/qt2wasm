@@ -8,6 +8,7 @@
 #   pixi run test             codegen tests + build and run both examples
 #   pixi run run              build the examples and run them under wasmtime
 #   pixi run example          build and run example/ (plain Qt-for-WASI program)
+#   pixi run docs             MkDocs site for the counter example from its WIT
 #   pixi run build-pkg wasm-tools   rattler-build one recipe into out/
 #   pixi run build-qt2wasm    pixi-build the qt2wasm package into qt2wasm/dist/
 #   pixi run publish-status   what CI would still publish to nandi-testing
@@ -36,6 +37,8 @@ qt6-wasi = { version = "6.8.3.*", channel = "https://prefix.dev/nandi-testing" }
 wit-bindgen = { version = "0.46.*", channel = "https://prefix.dev/nandi-testing" }
 wasm-tools = { version = "1.239.*", channel = "https://prefix.dev/nandi-testing" }
 wasi-preview1-adapter = { version = "36.*", channel = "https://prefix.dev/nandi-testing" }
+mkdocs = ">=1.6.1,<2"
+mkdocs-material = ">=9.8.1,<10"
 
 [activation.env]
 PYTHONPATH = "$PIXI_PROJECT_ROOT/qt2wasm"
@@ -60,6 +63,17 @@ description = "qt2wasm tests: codegen, WIT validation and the built examples"
 cmd = "python -m pytest -q qt2wasm/tests"
 depends-on = ["examples"]
 env = { QT2WASM_TEST_COUNTER = "$PIXI_PROJECT_ROOT/qt2wasm/build/counter.wasm", QT2WASM_TEST_CANVAS = "$PIXI_PROJECT_ROOT/qt2wasm/build/canvas.wasm" }
+
+[tasks.docs]
+description = "MkDocs site for the counter example from its WIT (wit-bindgen markdown); open qt2wasm/build/counter-docs/site/index.html"
+cmd = "python -m qt2wasm mkdocs qt2wasm/examples/counter/counter.wit -o qt2wasm/build/counter-docs --build"
+inputs = ["qt2wasm/qt2wasm/mdsite.py", "qt2wasm/examples/counter/counter.wit"]
+outputs = ["qt2wasm/build/counter-docs/site/index.html"]
+
+[tasks.docs-serve]
+description = "Serve the counter docs site with live reload (mkdocs serve)"
+cmd = "mkdocs serve -f qt2wasm/build/counter-docs/mkdocs.yml"
+depends-on = ["docs"]
 
 # --- packages --------------------------------------------------------------
 

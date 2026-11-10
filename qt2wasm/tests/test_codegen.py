@@ -361,6 +361,41 @@ def test_qch_for_counter_example(tmp_path):
     assert "Counter" in keys
 
 
+def test_tidy_markdown_for_mkdocs():
+    from qt2wasm import mdsite
+
+    md = "- `linear`\n  <p>Add one.\n\nresource docs\n----\n\n\n\n#### x\n<p>\n"
+    assert mdsite.tidy(md) == (
+        "- `linear`\n\n    Add one.\n\nresource docs\n\n----\n\n#### x\n"
+    )
+
+
+@pytest.mark.skipif(not WIT_BINDGEN, reason="no wit-bindgen")
+def test_counter_markdown_and_mkdocs(tmp_path):
+    from qt2wasm import mdsite
+
+    wit = ROOT / "examples" / "counter" / "counter.wit"
+    md = mdsite.markdown(wit, tmp_path / "md")
+    text = md.read_text()
+    assert md.name == "counter.md"
+    assert "Emitted when the count changes to `value`." in text
+    assert "<p>" not in text
+    # examples/counter/counter.md is the checked-in Markdown for counter.wit.
+    assert (wit.parent / "counter.md").read_text() == text, (
+        "examples/counter/counter.md is stale: "
+        "`pixi run qt2wasm markdown qt2wasm/examples/counter/counter.wit "
+        "-o qt2wasm/examples/counter`"
+    )
+    cfg = mdsite.mkdocs_project([wit], tmp_path / "site")
+    assert 'site_name: "demo:counter@0.1.0"' in cfg.read_text()
+    assert (tmp_path / "site" / "docs" / "counter.md").exists()
+    if shutil.which("mkdocs"):
+        site = mdsite.mkdocs_build(cfg, strict=True)
+        html = (site / "counter.html").read_text()
+        assert "A counter that steps by one or doubles." in html
+        assert "Double the value (zero becomes one)." in html
+
+
 def _pkg(name):
     return subprocess.run(
         ["pkg-config", "--cflags", "--libs", name],

@@ -5,6 +5,9 @@ qt2wasm wit HEADER.json... [-o x.wit] moc metatypes -> WIT (Qt-first);
                                       --docs-from DIR adds the Qt docs (qdoc)
 qt2wasm glue HEADER.json... --bindings component.h -o glue.cpp
 qt2wasm qch DIR [-o name.qch]          qdoc comments in DIR -> Qt Help (.qch)
+qt2wasm markdown APP.wit [-o DIR]     WIT -> Markdown (wit-bindgen markdown)
+qt2wasm mkdocs APP.wit... -o DIR      MkDocs site project from the WIT;
+                                      --build also runs `mkdocs build`
 """
 
 from __future__ import annotations
@@ -182,6 +185,24 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--bindings", required=True, help="the header `wit-bindgen c` wrote")
     g.add_argument("-o", "--output", required=True)
 
+    md = sub.add_parser("markdown", help="WIT -> Markdown with wit-bindgen markdown")
+    md.add_argument("wit", help="a .wit file, a WIT directory or a component .wasm")
+    md.add_argument("-o", "--out-dir", default=".", help="directory for <name>.md")
+    md.add_argument("--world", help="world to document (if the WIT has several)")
+
+    mk = sub.add_parser("mkdocs", help="MkDocs site project from WIT files")
+    mk.add_argument("wit", nargs="+", help=".wit files (one page each)")
+    mk.add_argument(
+        "-o", "--output", required=True, help="project dir: mkdocs.yml + docs/"
+    )
+    mk.add_argument("--title", help="site_name (default: the WIT package)")
+    mk.add_argument(
+        "--theme", help="MkDocs theme (default material if installed, else mkdocs)"
+    )
+    mk.add_argument(
+        "--build", action="store_true", help="also run `mkdocs build` (into DIR/site)"
+    )
+
     a = ap.parse_args(argv)
     try:
         if a.cmd == "build":
@@ -196,6 +217,19 @@ def main(argv: list[str] | None = None) -> int:
                 sys.stdout.write(text)
         elif a.cmd == "qch":
             _qch(a)
+        elif a.cmd == "markdown":
+            from qt2wasm import mdsite
+
+            print(mdsite.markdown(Path(a.wit), Path(a.out_dir), world=a.world))
+        elif a.cmd == "mkdocs":
+            from qt2wasm import mdsite
+
+            cfg = mdsite.mkdocs_project(
+                [Path(w) for w in a.wit], Path(a.output), a.title, a.theme
+            )
+            print(cfg)
+            if a.build:
+                print(mdsite.mkdocs_build(cfg) / "index.html")
         elif a.cmd == "glue":
             Path(a.output).write_text(
                 gluegen.generate(_model(a.json), Path(a.bindings))

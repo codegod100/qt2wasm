@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "qt2wasm"
-version = "0.5.0"
+version = "0.6.0"
 description = "Build Qt C++ into WASI WebAssembly components"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,6 +12,7 @@ requires-python = ">=3.10"
 [project.optional-dependencies]
 fonts = ["fonttools"]
 test = ["pytest", "wasmtime"]
+docs = ["mkdocs", "mkdocs-material"]
 
 [project.scripts]
 qt2wasm = "qt2wasm.cli:main"
