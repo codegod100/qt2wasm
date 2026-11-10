@@ -1,0 +1,8 @@
+/* qt2wasm: tidy wit-bindgen markdown in the Material/Zensical theme. */
+.md-typeset h4 code { font-size: 0.95em; padding: 0.15em 0.45em; }
+.md-typeset h4 { margin-top: 2.2em; padding-top: 0.6em;
+  border-top: 1px solid var(--md-default-fg-color--lightest); }
+.md-typeset h5 { margin-top: 1em; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--md-default-fg-color--light); }
+.md-typeset h2 { margin-top: 2.5em; }
+.md-typeset .grid.cards > ul > li { display: flex; flex-direction: column; }

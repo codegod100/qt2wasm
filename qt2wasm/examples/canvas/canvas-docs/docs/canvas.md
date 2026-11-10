@@ -1,4 +1,4 @@
-# <a id="component"></a>World component
+# <a id="component"></a>demo:canvas@0.1.0 API reference
 
  - Imports:
     - interface `demo:canvas/types@0.1.0`

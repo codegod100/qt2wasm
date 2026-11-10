@@ -1,4 +1,4 @@
-# <a id="component"></a>World component
+# <a id="component"></a>demo:counter@0.1.0 API reference
 
  - Imports:
     - interface `demo:counter/counter-events@0.1.0`

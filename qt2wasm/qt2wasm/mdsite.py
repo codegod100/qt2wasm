@@ -135,6 +135,173 @@ def find_builder(name: str | None = None) -> tuple[str, list[str]] | None:
     return None
 
 
+def _have(mod: str) -> bool:
+    try:
+        __import__(mod)
+    except ImportError:
+        return False
+    return True
+
+
+def anchor(name: str) -> str:
+    """wit-bindgen markdown's anchor id for an interface or world name."""
+    return re.sub(r"[^A-Za-z0-9]", "_", name)
+
+
+def _docs_before(lines: list[str], i: int) -> str:
+    """The `///` doc comment right above lines[i], as text."""
+    doc: list[str] = []
+    j = i - 1
+    while j >= 0 and lines[j].strip().startswith("///"):
+        doc.insert(0, lines[j].strip()[3:].strip())
+        j -= 1
+    return "\n".join(doc).strip()
+
+
+def wit_outline(wit: Path) -> dict:
+    """Package, world, imports/exports and each interface's doc from WIT text
+    (a .wit file or a directory of them). Empty when there is no text (.wasm)."""
+    wit = Path(wit)
+    files = sorted(wit.glob("*.wit")) if wit.is_dir() else [wit]
+    files = [f for f in files if f.suffix == ".wit"]
+    out = {"package": None, "world": None, "interfaces": [], "imports": [], "exports": []}
+    for f in files:
+        lines = f.read_text().splitlines()
+        world = False
+        for i, line in enumerate(lines):
+            t = line.strip()
+            if m := re.match(r"package\s+([^;\s]+)\s*;", t):
+                out["package"] = out["package"] or m.group(1)
+            elif m := re.match(r"interface\s+([\w-]+)\s*\{", t):
+                out["interfaces"].append((m.group(1), _docs_before(lines, i)))
+            elif m := re.match(r"world\s+([\w-]+)\s*\{", t):
+                out["world"] = out["world"] or m.group(1)
+                world = True
+            elif world and (m := re.match(r"(import|export)\s+([^;]+);", t)):
+                out[m.group(1) + "s"].append(m.group(2).strip())
+            elif world and t == "}":
+                world = False
+    return out
+
+
+def _brief(doc: str) -> str:
+    """First paragraph of a doc comment, joined to one line."""
+    return " ".join(doc.split("\n\n")[0].split())
+
+
+def _overview(title: str, comps: list[dict]) -> str:
+    lines = [f"# {title}", ""]
+    if len(comps) == 1:
+        c = comps[0]
+        main = [d for n, d in c["outline"]["interfaces"] if n in c["outline"]["exports"]]
+        if main and main[0]:
+            lines += [_brief(main[0]), ""]
+    lines += [
+        '!!! info "Generated API reference"',
+        "",
+        "    qt2wasm generated these pages from the component's WIT with",
+        "    `wit-bindgen markdown`. The prose is the Qt documentation (qdoc",
+        "    `/*! */` comments) that qt2wasm carries into the WIT as `///` docs.",
+        "",
+    ]
+    for c in comps:
+        o = c["outline"]
+        if len(comps) > 1:
+            lines += [f"## {c['title']}", ""]
+        if o["package"]:
+            lines += [f"WIT package `{o['package']}`" + (
+                f", world `{o['world']}`." if o["world"] else "."), ""]
+        ifaces = dict(o["interfaces"])
+        rows = []
+        for kind, names in (("export", o["exports"]), ("import", o["imports"])):
+            for n in names:
+                short = n.split("/")[-1].split("@")[0]
+                full = n if ":" in n else (
+                    f"{o['package'].split('@')[0]}/{n}@{o['package'].split('@')[1]}"
+                    if o["package"] and "@" in o["package"] else n
+                )
+                rows.append((kind, short, full, _brief(ifaces.get(short, ""))))
+        if rows:
+            lines += ['<div class="grid cards" markdown>', ""]
+            for kind, short, full, brief in rows:
+                link = f"{c['api']}#{anchor(full)}"
+                lines += [
+                    f"-   **[`{short}`]({link})** &nbsp; _{kind}_",
+                    "",
+                    "    ---",
+                    "",
+                    f"    {brief or full}",
+                    "",
+                ]
+            lines += ["</div>", ""]
+        lines += [
+            f"[API reference]({c['api']}){{ .md-button .md-button--primary }}"
+            + (f" [WIT source]({c['source']}){{ .md-button }}" if c["source"] else ""),
+            "",
+        ]
+    return "\n".join(lines)
+
+
+def _theme_yaml(theme: str, builder: str | None) -> list[str]:
+    if theme != "material":
+        return ["theme:", f"  name: {theme}"]
+    # Zensical's default (modern) variant uses Lucide icons; mkdocs-material
+    # only ships its own set.
+    ic = (
+        {"logo": "lucide/blocks", "auto": "lucide/sun-moon", "light": "lucide/sun",
+         "dark": "lucide/moon"}
+        if builder != "mkdocs"
+        else {"logo": "material/puzzle", "auto": "material/brightness-auto",
+              "light": "material/weather-sunny", "dark": "material/weather-night"}
+    )
+    return [
+        "theme:",
+        "  name: material",
+        "  icon:",
+        f"    logo: {ic['logo']}",
+        "  palette:",
+        "    - media: \"(prefers-color-scheme)\"",
+        "      toggle:",
+        f"        icon: {ic['auto']}",
+        "        name: Switch to light mode",
+        "    - media: \"(prefers-color-scheme: light)\"",
+        "      scheme: default",
+        "      primary: indigo",
+        "      accent: indigo",
+        "      toggle:",
+        f"        icon: {ic['light']}",
+        "        name: Switch to dark mode",
+        "    - media: \"(prefers-color-scheme: dark)\"",
+        "      scheme: slate",
+        "      primary: indigo",
+        "      accent: indigo",
+        "      toggle:",
+        f"        icon: {ic['dark']}",
+        "        name: Switch to system preference",
+        "  features:",
+        "    - navigation.sections",
+        "    - navigation.top",
+        "    - navigation.footer",
+        "    - navigation.tracking",
+        "    - toc.follow",
+        "    - search.highlight",
+        "    - search.suggest",
+        "    - content.code.copy",
+    ]
+
+
+EXTRA_CSS = """\
+/* qt2wasm: tidy wit-bindgen markdown in the Material/Zensical theme. */
+.md-typeset h4 code { font-size: 0.95em; padding: 0.15em 0.45em; }
+.md-typeset h4 { margin-top: 2.2em; padding-top: 0.6em;
+  border-top: 1px solid var(--md-default-fg-color--lightest); }
+.md-typeset h5 { margin-top: 1em; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--md-default-fg-color--light); }
+.md-typeset h2 { margin-top: 2.5em; }
+.md-typeset .grid.cards > ul > li { display: flex; flex-direction: column; }
+"""
+
+
 def mkdocs_project(
     wits: list[Path],
     out: Path,
@@ -144,8 +311,10 @@ def mkdocs_project(
     wit_bindgen: Path | None = None,
     builder: str | None = None,
 ) -> Path:
-    """Write an MkDocs project for wits into out/: mkdocs.yml, docs/index.md
-    and one docs/<name>.md per WIT. Returns the mkdocs.yml path.
+    """Write a docs site project for wits into out/: mkdocs.yml and docs/
+    with an overview (index.md), and per WIT the API reference <name>.md and
+    the WIT source <name>-wit.md. Zensical reads it as is; so does MkDocs.
+    Returns the mkdocs.yml path.
 
     docs/ is regenerated; mkdocs.yml is rewritten too (it is generated)."""
     if not wits:
@@ -155,48 +324,76 @@ def mkdocs_project(
     if docs.exists():
         shutil.rmtree(docs)
     docs.mkdir(parents=True)
-    pages: list[tuple[str, str, str | None]] = []  # (nav title, file, package)
+    comps: list[dict] = []
     for w in wits:
         w = Path(w)
         md = markdown(w, docs, world=world, wit_bindgen=wit_bindgen)
-        pkg = package_name(w)
-        pages.append((pkg or md.stem, md.name, pkg))
+        outline = wit_outline(w)
+        # wit-bindgen titles the page "World <name>"; name the package.
+        text = md.read_text()
+        text = re.sub(
+            r"^# (<a id=\"[^\"]*\"></a>)World ([\w-]+)",
+            lambda m: f"# {m.group(1)}{outline['package'] or m.group(2)} API reference",
+            text,
+            count=1,
+        )
+        md.write_text(text)
+        source = None
+        if w.is_file() and w.suffix == ".wit":
+            source = f"{md.stem}-wit.md"
+            (docs / source).write_text(
+                f"# {outline['package'] or md.stem}: WIT\n\n"
+                f"The WIT qt2wasm generated for this component (`{w.name}`).\n\n"
+                # Pygments has no WIT lexer; WIT's syntax is close enough to
+                # Rust's (keywords, `///` docs, generics) to read well.
+                '```rust title="' + w.name + '"\n' + w.read_text().rstrip() + "\n```\n"
+            )
+        comps.append({
+            "title": outline["package"] or md.stem,
+            "api": md.name,
+            "source": source,
+            "outline": outline,
+        })
 
     if title is None:
-        title = pages[0][0] if len(pages) == 1 else "Component API"
-    lines = [
-        f"# {title}",
-        "",
-        "API reference for the WASI component(s) below, generated by qt2wasm",
-        "from the WIT (`wit-bindgen markdown`). The prose is the Qt doc",
-        "comments, carried into the WIT as `///` docs.",
-        "",
-    ]
-    for nav, f, pkg in pages:
-        lines.append(f"- [{nav}]({f})" + (f": WIT package `{pkg}`" if pkg else ""))
-    (docs / "index.md").write_text("\n".join(lines) + "\n")
+        title = comps[0]["title"] if len(comps) == 1 else "Component API"
+    (docs / "index.md").write_text(_overview(title, comps))
 
+    found = find_builder(builder)
+    bname = found[0] if found else builder
     if theme is None:
         # Zensical renders the Material look itself; plain MkDocs needs
         # mkdocs-material installed for it.
-        b = find_builder(builder)
-        theme = "material" if (b and b[0] == "zensical") or have_material() else "mkdocs"
+        theme = "material" if bname == "zensical" or have_material() else "mkdocs"
+    if theme == "material":
+        (docs / "stylesheets").mkdir()
+        (docs / "stylesheets" / "qt2wasm.css").write_text(EXTRA_CSS)
+
     yml = [
         "# Generated by qt2wasm. Regenerate rather than edit.",
         "# Build with `zensical build` (or `mkdocs build`).",
         f"site_name: {_yaml_str(title)}",
+        f"site_description: {_yaml_str('API reference for ' + title + ', generated by qt2wasm')}",
         "docs_dir: docs",
         "site_dir: site",
         "use_directory_urls: false",
-        "theme:",
-        f"  name: {theme}",
-        "markdown_extensions:",
-        "  - toc:",
-        "      permalink: true",
-        "nav:",
-        "  - Overview: index.md",
+        *_theme_yaml(theme, bname),
     ]
-    yml += [f"  - {_yaml_str(nav)}: {f}" for nav, f, _ in pages]
+    if theme == "material":
+        yml += ["extra_css:", "  - stylesheets/qt2wasm.css"]
+    yml += ["markdown_extensions:", "  - admonition", "  - attr_list", "  - md_in_html",
+            "  - toc:", "      permalink: true"]
+    if _have("pymdownx"):
+        yml += ["  - pymdownx.highlight", "  - pymdownx.inlinehilite",
+                "  - pymdownx.superfences", "  - pymdownx.details"]
+    yml += ["nav:", "  - Overview: index.md"]
+    for c in comps:
+        sub = [f"API reference: {c['api']}"] + (
+            [f"WIT source: {c['source']}"] if c["source"] else [])
+        if len(comps) == 1:
+            yml += [f"  - {e}" for e in sub]
+        else:
+            yml += [f"  - {_yaml_str(c['title'])}:"] + [f"    - {e}" for e in sub]
     cfg = out / "mkdocs.yml"
     cfg.write_text("\n".join(yml) + "\n")
     return cfg

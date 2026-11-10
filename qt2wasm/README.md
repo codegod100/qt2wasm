@@ -209,8 +209,12 @@ qt2wasm markdown app.wit -o docs/           # just the Markdown page
 qt2wasm mkdocs a.wit b.wit -o api --build   # api/mkdocs.yml + docs/ + site/
 ```
 
-`mkdocs` writes one page per WIT plus an overview, named after the WIT
-package; `--build` builds it (`--builder zensical|mkdocs` to pick), or leave
+`mkdocs` writes an overview page (the exported interface's docs and a card
+per interface), and per WIT an API reference page and the WIT source with
+highlighting, all named after the WIT package. With the Material theme
+(Zensical's default look) the config turns on a light/dark toggle, sections,
+search suggestions and code copy buttons, plus a small stylesheet for
+wit-bindgen's headings; `--build` builds it (`--builder zensical|mkdocs` to pick), or leave
 it out and run `zensical serve -f api/mkdocs.yml`. The theme is Material
 with Zensical or mkdocs-material, else plain `mkdocs` (`--theme` picks one).
 The examples check in their docs, made with Zensical: `examples/<name>/<name>.wit`,
