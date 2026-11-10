@@ -50,7 +50,7 @@ cmd = "python -m qt2wasm"
 [tasks.examples]
 description = "Build the counter and canvas examples into qt2wasm/build/"
 cmd = "bash qt2wasm/examples/build.sh"
-inputs = ["qt2wasm/qt2wasm/**", "qt2wasm/cmake/**", "qt2wasm/include/**", "qt2wasm/runtime/**", "qt2wasm/examples/**"]
+inputs = ["qt2wasm/qt2wasm/**", "qt2wasm/cmake/**", "qt2wasm/include/**", "qt2wasm/runtime/**", "qt2wasm/examples/build.sh", "qt2wasm/examples/*/CMakeLists.txt", "qt2wasm/examples/*/*.cpp", "qt2wasm/examples/*/*.h"]
 outputs = ["qt2wasm/build/counter.wasm", "qt2wasm/build/canvas.wasm"]
 
 [tasks.run]
@@ -65,10 +65,9 @@ depends-on = ["examples"]
 env = { QT2WASM_TEST_COUNTER = "$PIXI_PROJECT_ROOT/qt2wasm/build/counter.wasm", QT2WASM_TEST_CANVAS = "$PIXI_PROJECT_ROOT/qt2wasm/build/canvas.wasm" }
 
 [tasks.docs]
-description = "Regenerate the checked-in example docs from their WIT: examples/<name>/<name>.md and the Zensical site <name>-docs/ (open <name>-docs/site/index.html)"
+description = "Rebuild both examples, then regenerate their checked-in docs: <name>.wit (when qdoc is found), <name>.md and the Zensical site examples/<name>/<name>-docs/site/index.html"
 cmd = "bash qt2wasm/examples/docs.sh"
-inputs = ["qt2wasm/qt2wasm/mdsite.py", "qt2wasm/examples/docs.sh", "qt2wasm/examples/*/*.wit"]
-outputs = ["qt2wasm/examples/*/*.md", "qt2wasm/examples/*/*-docs/site/index.html"]
+depends-on = ["examples"]
 
 [tasks.docs-serve]
 description = "Serve the counter example's docs site with live reload (zensical serve)"
