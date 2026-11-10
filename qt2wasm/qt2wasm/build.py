@@ -5,7 +5,10 @@ Steps (each logged with its time):
                          wit-bindgen, wasm-tools, wasm-opt, p1 reactor adapter
   2. moc                 every header with Q_OBJECT/Q_GADGET: C++ for the
                          wasm build and --output-json metatypes
-  3. codegen             Qt-first: WIT + C++ glue from the metatypes.
+  3. codegen             Qt-first: WIT + C++ glue from the metatypes, with
+                         the Qt doc comments as WIT /// docs when qdoc is
+                         found (--docs). The WIT is also written next to
+                         the component as <name>.wit.
                          WIT-first (--wit): bindings only, you implement them.
   4. cmake               configure + build with the Qt WASI toolchain file
   5. optimise            wasm-opt on the core module (keeps the WIT section)
@@ -24,6 +27,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from qt2wasm import docs as qdocs
 from qt2wasm import gluegen, model, witgen
 
 _PKG = Path(__file__).resolve().parent
@@ -93,7 +97,11 @@ def find_tools(args) -> Tools:
     pkg_hint = "install qt6-wasi from https://prefix.dev/nandi-testing"
     wasi_sdk = need(
         "wasi-sdk",
-        Path(args.wasi_sdk or os.environ.get("WASI_SDK_PREFIX") or prefix / "opt" / "wasi-sdk"),
+        Path(
+            args.wasi_sdk
+            or os.environ.get("WASI_SDK_PREFIX")
+            or prefix / "opt" / "wasi-sdk"
+        ),
         f"--wasi-sdk or WASI_SDK_PREFIX; {pkg_hint} (it depends on wasi-sdk 27)",
     )
     qt_prefix = need(
@@ -114,7 +122,10 @@ def find_tools(args) -> Tools:
     moc = need(
         "host moc",
         _which(
-            "moc", "QT2WASM_MOC", qtpkg / "host" / "libexec" / "moc", Path("/usr/lib/qt6/libexec/moc")
+            "moc",
+            "QT2WASM_MOC",
+            qtpkg / "host" / "libexec" / "moc",
+            Path("/usr/lib/qt6/libexec/moc"),
         ),
         f"QT2WASM_MOC; {pkg_hint}, or any Qt 6 moc with output revision 68",
     )
@@ -132,7 +143,10 @@ def find_tools(args) -> Tools:
     adapter = _which(
         "wasi_snapshot_preview1.reactor.wasm",
         "QT2WASM_ADAPTER",
-        prefix / "share" / "wasi-preview1-adapter" / "wasi_snapshot_preview1.reactor.wasm",
+        prefix
+        / "share"
+        / "wasi-preview1-adapter"
+        / "wasi_snapshot_preview1.reactor.wasm",
     )
     if missing:
         raise BuildError("missing tools:\n" + "\n".join(missing))
@@ -222,6 +236,48 @@ def imports_of(wasm_tools: Path, component: Path) -> list[str]:
     return re.findall(r"^\s*import ([\w:/.@-]+);", wit, re.MULTILINE)
 
 
+def qdoc_includes(tools: Tools, project: Path) -> list[Path]:
+    """What qdoc's clang needs to parse the project's headers."""
+    return [ROOT / "include", project, *qdocs.qt_includes(tools.qt_prefix)]
+
+
+def project_docs(args, tools: Tools, project: Path, bdir: Path, gen: Path):
+    """Qt doc comments via qdoc, or None. --docs auto (default) skips quietly
+    without qdoc and warns if it fails; --docs qdoc makes either an error."""
+    mode = getattr(args, "docs", "auto") or "auto"
+    if mode == "none":
+        return None
+    qdoc = qdocs.find_qdoc()
+    if qdoc is None:
+        if mode == "qdoc":
+            raise BuildError(
+                "--docs qdoc: qdoc not found (QT2WASM_QDOC, PATH, or "
+                "/usr/lib/qt6/bin/qdoc from qt6-documentation-tools)"
+            )
+        log("docs: no qdoc found, WIT without Qt docs (set QT2WASM_QDOC)")
+        return None
+    try:
+        docs, qlog = qdocs.run_qdoc(
+            qdoc,
+            project,
+            gen / "qdoc",
+            qdoc_includes(tools, project),
+            exclude=[bdir, project / "build"],
+        )
+    except Exception as e:
+        if mode == "qdoc":
+            raise BuildError(str(e)) from e
+        log(f"docs: qdoc failed, WIT without Qt docs: {str(e).splitlines()[0]}")
+        return None
+    n = len(docs.classes) + len(docs.functions) + len(docs.properties) + len(docs.enums)
+    log(f"docs: qdoc {qdoc}: {n} documented item(s)")
+    lost = qlog.count("Cannot tie this documentation")
+    if lost:
+        log(f"docs: qdoc could not place {lost} comment(s); see {gen / 'qdoc'}")
+        (gen / "qdoc" / "qdoc.log").write_text(qlog)
+    return docs
+
+
 def build(args) -> Path:
     t0 = time.time()
     project = Path(args.project).resolve()
@@ -283,9 +339,10 @@ def build(args) -> Path:
         )
     else:
         m = model.build_model(model.load_moc_json(jsons))
+        docs = project_docs(args, tools, project, bdir, gen)
         wit_dir = gen / "wit"
         wit_dir.mkdir()
-        (wit_dir / "component.wit").write_text(witgen.generate(m))
+        (wit_dir / "component.wit").write_text(witgen.generate(m, docs))
         run([tools.wasm_tools, "component", "wit", wit_dir])  # parse check
         run(
             [
@@ -302,6 +359,9 @@ def build(args) -> Path:
             gluegen.generate(m, gen / "bindings" / "component.h")
         )
         log(f"codegen: {len(m.classes)} class(es) -> {wit_dir / 'component.wit'}")
+    if not args.wit:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(wit_dir / "component.wit", out.with_suffix(".wit"))
     if args.font:
         fonts = [Path(f).resolve() for f in args.font]
         if args.font_subset != "none":

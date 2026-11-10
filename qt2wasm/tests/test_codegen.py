@@ -3,6 +3,7 @@ without them:
   moc              host Qt 6 moc (QT2WASM_MOC, PATH, or /usr/lib/qt6/libexec/moc)
   wasm-tools       to validate generated WIT
   wit-bindgen      + host Qt6Core (pkg-config) for the native glue test
+  qdoc             (QT2WASM_QDOC, PATH, /usr/lib/qt6/bin/qdoc) for the docs test
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from qt2wasm import gluegen, model, witgen
+from qt2wasm import docs, gluegen, model, witgen
 from qt2wasm.names import kebab, snake, wit_ident
 
 HERE = Path(__file__).parent
@@ -209,6 +210,113 @@ def test_examples_generate_valid_wit(example, tmp_path):
     if example == "canvas":
         assert "flags text-options" in r.stdout and "record stroke" in r.stdout
         assert "pixel: func(at: point) -> option<rgba>;" in r.stdout
+
+
+# What qdoc 6.4+ writes for a documented class (WebXML, trimmed).
+WEBXML = """<?xml version="1.0" encoding="UTF-8"?>
+<WebXML><document>
+<class name="Thing" fullname="Thing" documented="true">
+  <description><brief>A thing.</brief><para>Second paragraph.</para></description>
+  <function name="Thing" meta="constructor">
+    <description><para>Makes a thing.</para></description></function>
+  <function name="paint" meta="plain">
+    <description><para>Paints <argument>fillColor</argument> using
+      <link raw="kind" type="property">kind</link>.</para>
+      <see-also>size(), QWidget</see-also></description></function>
+  <function name="changed" meta="signal">
+    <description><para>Emitted when it changes; <argument>why</argument>.</para>
+    </description></function>
+  <property name="kind" documented="true">
+    <description><brief>This property holds The kind of thing..</brief></description>
+  </property>
+  <enum name="Kind" fullname="Thing::Kind">
+    <description><para>Kinds.</para>
+      <list type="enum">
+        <definition><term>Thing::Kind::Round</term>Round</definition>
+        <item><para>Has no corners.</para></item>
+        <definition><term>Thing::Kind::Square</term>Square</definition>
+        <item><para>Has four.</para></item>
+      </list></description></enum>
+</class>
+</document></WebXML>
+"""
+
+
+def test_qdoc_webxml_becomes_wit_docs(tmp_path):
+    (tmp_path / "t.webxml").write_text(WEBXML)
+    d = docs.load_webxml([tmp_path / "t.webxml"])
+    assert d.prop("Thing", "kind") == "This property holds the kind of thing."
+    assert d.value("Thing::Kind", "Round") == "Has no corners."
+    m = model.build_model(
+        [
+            _cls(
+                enums=[{"name": "Kind", "values": ["Round", "Square"]}],
+                properties=[
+                    {"name": "kind", "type": "Kind", "read": "kind", "write": "setKind"}
+                ],
+                methods=[
+                    {
+                        "name": "paint",
+                        "returnType": "void",
+                        "arguments": [{"name": "fillColor", "type": "QColor"}],
+                    }
+                ],
+                signals=[
+                    {
+                        "name": "changed",
+                        "returnType": "void",
+                        "arguments": [{"name": "why", "type": "QString"}],
+                    }
+                ],
+            )
+        ]
+    )
+    text = witgen.generate(m, d)
+    assert "/// A thing.\n///\n/// Exported from Thing" in text
+    assert (
+        "    /// A thing.\n    ///\n    /// Second paragraph.\n    resource thing"
+        in text
+    )
+    assert "        /// Makes a thing.\n        constructor();" in text
+    assert "/// Paints `fill-color` using `kind`." in text
+    assert "/// See also: `size`, QWidget." in text
+    assert "/// Sets `kind`." in text and "/// Q_PROPERTY write: Thing::setKind" in text
+    assert "        /// Has no corners.\n        round," in text
+    assert "    /// Emitted when it changes; `why`.\n    changed: func(" in text
+    assert witgen.generate(m) == witgen.generate(m, docs.Docs())  # no docs, same WIT
+    if WASM_TOOLS:
+        (tmp_path / "wit").mkdir()
+        (tmp_path / "wit" / "c.wit").write_text(text)
+        subprocess.run(
+            [WASM_TOOLS, "component", "wit", str(tmp_path / "wit")], check=True
+        )
+
+
+def test_doc_lines_wrap_prose_not_code():
+    text = "word " * 30 + "\n\n```\n" + "x" * 100 + "\n```"
+    lines = docs.doc_lines(text.strip(), "    ")
+    assert all(len(ln) <= 80 for ln in lines if "xxx" not in ln)
+    assert "    /// " + "x" * 100 in lines and "    ///" in lines
+
+
+QDOC = docs.find_qdoc()
+
+
+@needs_moc
+@pytest.mark.skipif(not QDOC, reason="no qdoc")
+def test_qdoc_documents_counter_example(tmp_path):
+    proj = ROOT / "examples" / "counter"
+    d, _ = docs.run_qdoc(
+        QDOC, proj, tmp_path / "qdoc", [ROOT / "include", proj, *docs.qt_includes()]
+    )
+    m = model.build_model(
+        model.load_moc_json([_moc_json(proj / "counter.h", tmp_path)])
+    )
+    text = witgen.generate(m, d)
+    assert "/// A counter that steps by one or doubles." in text
+    assert "/// Returns the last `n` values the counter held, oldest first." in text
+    assert "/// Emitted when the count changes to `value`." in text
+    assert "        /// Add one.\n        linear," in text
 
 
 def _pkg(name):

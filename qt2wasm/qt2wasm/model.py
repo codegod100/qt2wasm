@@ -169,6 +169,7 @@ class Method:
     params: list[Param]
     result: WitType | None
     kind: str = "method"  # method | getter | setter
+    prop: str | None = None  # getter/setter: the Q_PROPERTY's C++ name
 
 
 @dataclass
@@ -420,7 +421,7 @@ def build_model(classes: list[dict]) -> Model:
             if p.get("read"):
                 t = mapper.map(p["type"], f"{cpp}::{p['name']} (property)", cpp)
                 add(
-                    Method(p["read"], wit_ident(p["name"]), [], t, "getter"),
+                    Method(p["read"], wit_ident(p["name"]), [], t, "getter", p["name"]),
                     f"property {p['name']}",
                 )
                 if p.get("write"):
@@ -431,6 +432,7 @@ def build_model(classes: list[dict]) -> Model:
                             [Param("value", t)],
                             None,
                             "setter",
+                            p["name"],
                         ),
                         f"property {p['name']} setter",
                     )

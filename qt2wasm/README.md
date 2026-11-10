@@ -35,7 +35,7 @@ channels = ["conda-forge", "https://prefix.dev/nandi-testing"]
 platforms = ["linux-64"]
 
 [dependencies]
-qt2wasm = { version = "0.3.*", channel = "https://prefix.dev/nandi-testing" }
+qt2wasm = { version = "0.4.*", channel = "https://prefix.dev/nandi-testing" }
 ```
 
 then `pixi run qt2wasm build path/to/project -o app.wasm` (add `--font some.ttf`
@@ -112,8 +112,50 @@ qt2wasm_add_component(counter SOURCES counter.cpp)      # add GUI for QtGui
 | `QImage` | `image { width, height, pixels: list<u8> }`, RGBA8888 |
 | `QVariant`, pointers, overloads | refused, with the member named |
 
-`qt2wasm wit moc_x.cpp.json` prints the WIT without building, and
+`qt2wasm build` writes the WIT next to the component (`app.wasm` ->
+`app.wit`). `qt2wasm wit moc_x.cpp.json` prints the WIT without building, and
 `qt2wasm glue` writes only the glue, for projects with their own build.
+
+### Docs: qdoc comments become WIT `///`
+
+Document the class the Qt way, with qdoc `/*! ... */` comments in the header
+or the `.cpp`, and `qt2wasm build` runs qdoc over the project and writes the
+text into the WIT as `///` docs, which wit-bindgen and other WIT tools carry
+into the bindings they generate:
+
+```cpp
+/*!
+    \fn QList<double> Counter::history(int n) const
+    Returns the last \a n values the counter held, oldest first.
+*/
+```
+
+```wit
+/// Returns the last `n` values the counter held, oldest first.
+history: func(n: s32) -> list<f64>;
+```
+
+| qdoc | WIT item |
+| --- | --- |
+| `\class X` | the interface (brief) and resource (full text), or a Q_GADGET's record |
+| constructor, method, slot | the resource's constructor or method |
+| `\property X::p` | getter `p` and setter `set-p`; on a Q_GADGET, the record field |
+| signal | its function in `iface-events` |
+| `\enum`, `\value` | the enum or flags, and each case |
+| `\a arg`, `\c code`, `\l`/`\sa` to a member | `` `arg` ``, `` `code` ``, the member's WIT name |
+
+`--docs auto` (the default) uses qdoc when it is found and skips it quietly
+otherwise. `--docs qdoc` makes a missing or failing qdoc an error, and
+`--docs none` turns it off. `qt2wasm wit ... --docs-from DIR` does the same
+for the `wit` command, and `--webxml PATH` reuses qdoc WebXML you already
+have. qdoc's own log, and anything it could not place, go to
+`build/qt2wasm/gen/qdoc/`. The docs are in the `.wit`, not inside the
+`.wasm`: a component's type section has nowhere to keep them.
+
+qdoc comes from qttools, which no conda channel ships, so it is not a
+dependency of the package yet. On Debian or Ubuntu, `apt install
+qt6-documentation-tools` gives `/usr/lib/qt6/bin/qdoc` (6.4 tested), or set
+`QT2WASM_QDOC`.
 
 ## Writing a component (WIT-first)
 
@@ -147,6 +189,7 @@ one.
 | wasm-opt (optional) | `QT2WASM_WASM_OPT`, `PATH` | binaryen 119 |
 | preview1 reactor adapter | `QT2WASM_ADAPTER`, `$CONDA_PREFIX/share/wasi-preview1-adapter/` | wasmtime 36 |
 | fontTools (optional, subsetting) | Python | 4.x |
+| qdoc (optional, WIT docs) | `QT2WASM_QDOC`, `PATH`, `/usr/lib/qt6/bin/qdoc` | 6.4 |
 
 ## Measured (2026-11-09)
 
