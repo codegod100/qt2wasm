@@ -62,10 +62,19 @@ function(qt2wasm_add_component target)
         string(TOUPPER "${_first}" _first)
         string(SUBSTRING "${_qpa}" 1 -1 _rest)
         set(_plugin "Q${_first}${_rest}IntegrationPlugin")
+        # Qt's object libraries: CMake 4's own WASI platform names them .obj, older CMake .o.
+        set(_objs)
+        foreach(_o "plugins/platforms/objects-Release/${_plugin}_init/${_plugin}_init.cpp"
+                   "lib/objects-Release/Gui_resources_1/.qt/rcc/qrc_qpdf_init.cpp"
+                   "lib/objects-Release/Gui_resources_2/.qt/rcc/qrc_gui_shaders_init.cpp")
+            if(EXISTS "${P}/${_o}.obj")
+                list(APPEND _objs "${P}/${_o}.obj")
+            else()
+                list(APPEND _objs "${P}/${_o}.o")
+            endif()
+        endforeach()
         set(_libs
-            "${P}/plugins/platforms/objects-Release/${_plugin}_init/${_plugin}_init.cpp.o"
-            "${P}/lib/objects-Release/Gui_resources_1/.qt/rcc/qrc_qpdf_init.cpp.o"
-            "${P}/lib/objects-Release/Gui_resources_2/.qt/rcc/qrc_gui_shaders_init.cpp.o"
+            ${_objs}
             "${P}/plugins/platforms/libq${_qpa}.a"
             "${P}/lib/libQt6Gui.a" "${P}/lib/libQt6BundledHarfbuzz.a"
             "${P}/lib/libQt6BundledFreetype.a" "${P}/lib/libQt6BundledLibpng.a"
