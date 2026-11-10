@@ -11,7 +11,9 @@ cd "$work"
 # CI keeps only the tail of the log: on failure show the compiler's errors.
 pc() {
     if ! perry compile "$@" > perry.log 2>&1; then
-        grep -v -E '^ *[0-9]+: <unknown>|strip-dedup|codegen:' perry.log | grep -i -B2 -A6 'error' | head -80
+        # the first real errors, short enough to survive the log tail
+        grep -E -i 'error|panick|unsupported|not supported|failed' perry.log \
+            | grep -v -E 'strip-dedup|<unknown>|search for|failed to compile \(see' | head -15 | cut -c1-300
         exit 1
     fi
 }
