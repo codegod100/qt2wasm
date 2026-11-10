@@ -21,6 +21,10 @@ Mapping (C++ -> WIT item that gets the text):
   -> WIT names where they are members of the same class
 
 qdoc is optional: without it the WIT is generated exactly as before.
+
+Qt Help: :func:`run_qch` runs qdoc a second time with HTML output and a
+``qhp.*`` project, which makes qdoc write a ``.qhp`` next to the pages, then
+qhelpgenerator packs them into a ``.qch`` for Qt Assistant / Qt Creator.
 """
 
 from __future__ import annotations
@@ -43,21 +47,45 @@ QDOC_CANDIDATES = (
 )
 
 
-def find_qdoc() -> Path | None:
-    """QT2WASM_QDOC, then qdoc/qdoc6 on PATH, then the usual distro paths."""
-    env = os.environ.get("QT2WASM_QDOC")
-    if env:
-        return Path(env) if Path(env).exists() else None
-    for name in ("qdoc", "qdoc6"):
+QHELPGENERATOR_CANDIDATES = (
+    "/usr/lib/qt6/libexec/qhelpgenerator",  # Debian/Ubuntu qt6-tools-dev-tools
+    "/usr/lib/qt6/bin/qhelpgenerator",
+    "/usr/lib64/qt6/libexec/qhelpgenerator",
+)
+
+
+def _find(env: str, names, candidates) -> Path | None:
+    v = os.environ.get(env)
+    if v:
+        return Path(v) if Path(v).exists() else None
+    for name in names:
         p = shutil.which(name)
         if p:
             return Path(p)
     prefix = os.environ.get("CONDA_PREFIX")
-    extra = [Path(prefix) / "bin" / "qdoc"] if prefix else []
-    for c in [*extra, *map(Path, QDOC_CANDIDATES)]:
+    extra = (
+        [Path(prefix) / d / n for d in ("bin", "libexec") for n in names]
+        if prefix
+        else []
+    )
+    for c in [*extra, *map(Path, candidates)]:
         if c.exists():
             return c
     return None
+
+
+def find_qhelpgenerator() -> Path | None:
+    """QT2WASM_QHELPGENERATOR, then qhelpgenerator on PATH, then distro paths."""
+    return _find(
+        "QT2WASM_QHELPGENERATOR",
+        ("qhelpgenerator", "qhelpgenerator6"),
+        QHELPGENERATOR_CANDIDATES,
+    )
+
+
+def find_qdoc() -> Path | None:
+    """QT2WASM_QDOC, then qdoc/qdoc6 on PATH, then the usual distro paths."""
+    return _find("QT2WASM_QDOC", ("qdoc", "qdoc6"), QDOC_CANDIDATES)
 
 
 def qt_includes(qt_prefix: Path | str | None = None) -> list[Path]:
@@ -107,7 +135,12 @@ class Docs:
 
 
 def qdocconf(
-    project: Path, out: Path, includes: list[Path], exclude: list[Path]
+    project: Path,
+    out: Path,
+    includes: list[Path],
+    exclude: list[Path],
+    fmt: str = "WebXML",
+    extra: list[str] = (),
 ) -> str:
     def q(p: Path) -> str:
         # qdocconf values are space-separated lists: escape the spaces.
@@ -120,13 +153,14 @@ def qdocconf(
         "headers.fileextensions = *.h *.hpp *.hxx *.hh",
         "sources.fileextensions = *.cpp *.cxx *.cc *.qdoc",
         f"outputdir = {q(out)}",
-        "outputformats = WebXML",
+        f"outputformats = {fmt}",
         "WebXML.quotinginformation = false",
     ]
     if exclude:
         lines.append("excludedirs = " + " ".join(q(e) for e in exclude))
     if includes:
         lines.append("includepaths = " + " ".join(f"-I{q(i)}" for i in includes))
+    lines.extend(extra)
     return "\n".join(lines) + "\n"
 
 
@@ -155,6 +189,119 @@ def run_qdoc(
     if r.returncode != 0:
         raise RuntimeError(f"qdoc failed ({r.returncode}):\n{log[-4000:]}")
     return load_webxml(sorted(out.rglob("*.webxml"))), log
+
+
+# --------------------------------------------------------------------------
+# Qt Help (.qch)
+
+
+def help_id(name: str) -> str:
+    """A name safe as a qhp project id and namespace part."""
+    return re.sub(r"[^A-Za-z0-9_]+", "_", name).strip("_") or "component"
+
+
+def qhp_conf(name: str, version: str = "") -> list[str]:
+    """qdocconf lines that make qdoc's HTML output also write ``<name>.qhp``."""
+    pid = help_id(name)
+    ns = f"org.qt2wasm.{pid}" + (f".{help_id(version)}" if version else "")
+    k = f"qhp.{pid}"
+    lines = [
+        f"qhp.projects = {pid}",
+        f"{k}.file = {pid}.qhp",
+        f"{k}.namespace = {ns}",
+        f"{k}.virtualFolder = {pid}",
+        f"{k}.indexTitle = {name}",
+        f"{k}.subprojects = classes",
+        f"{k}.subprojects.classes.title = Classes",
+        f"{k}.subprojects.classes.indexTitle = {name}",
+        f"{k}.subprojects.classes.selectors = class",
+        f"{k}.subprojects.classes.sortPages = true",
+    ]
+    if version:
+        lines.insert(0, f"version = {version}")
+    return lines
+
+
+def module_page(name: str) -> str:
+    """A \\module page for the help's front page, when the project has none.
+    Classes without \\inmodule default to the project name, so they list here."""
+    return (
+        "/*!\n"
+        f"    \\module {name}\n"
+        f"    \\title {name}\n"
+        f"    \\brief The {name} WASI component.\n\n"
+        "    The C++ classes this component exports, with their Qt documentation.\n"
+        "*/\n"
+    )
+
+
+def _has_module(project: Path, exclude) -> bool:
+    ex = [Path(e).resolve() for e in exclude]
+    for p in project.rglob("*"):
+        if p.suffix not in (".cpp", ".cxx", ".cc", ".qdoc", ".h", ".hpp"):
+            continue
+        if any(p.resolve().is_relative_to(e) for e in ex):
+            continue
+        try:
+            if "\\module " in p.read_text(errors="replace"):
+                return True
+        except OSError:
+            pass
+    return False
+
+
+def run_qch(
+    qdoc: Path,
+    qhelpgenerator: Path,
+    project: Path,
+    work: Path,
+    out: Path,
+    includes: list[Path] = (),
+    exclude: list[Path] = (),
+    name: str | None = None,
+    version: str = "",
+) -> tuple[Path, str]:
+    """qdoc HTML + .qhp over ``project`` in ``work``, then qhelpgenerator
+    -> ``out`` (a .qch). Returns ``out`` and the combined log."""
+    name = name or project.name or "component"
+    html = work / "html"
+    if html.exists():
+        shutil.rmtree(html)
+    html.mkdir(parents=True)
+    extra = qhp_conf(name, version)
+    if not _has_module(project, exclude):
+        page = work / "qt2wasm-module.qdoc"
+        page.write_text(module_page(name))
+        extra.append(f"sources += {str(page.resolve()).replace(' ', chr(92) + ' ')}")
+    conf = work / "qt2wasm-html.qdocconf"
+    conf.write_text(
+        qdocconf(project, html, list(includes), list(exclude), "HTML", extra)
+    )
+    r = subprocess.run(
+        [str(qdoc), "-outputdir", str(html), str(conf)],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=work,
+    )
+    log = (r.stdout + r.stderr).strip()
+    if r.returncode != 0:
+        raise RuntimeError(f"qdoc (HTML) failed ({r.returncode}):\n{log[-4000:]}")
+    qhp = html / f"{help_id(name)}.qhp"
+    if not qhp.exists():
+        raise RuntimeError(f"qdoc wrote no {qhp.name}:\n{log[-4000:]}")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    r = subprocess.run(
+        [str(qhelpgenerator), str(qhp), "-o", str(out)],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=work,
+    )
+    log += "\n" + (r.stdout + r.stderr).strip()
+    if r.returncode != 0 or not out.exists():
+        raise RuntimeError(f"qhelpgenerator failed ({r.returncode}):\n{log[-4000:]}")
+    return out, log
 
 
 # --------------------------------------------------------------------------

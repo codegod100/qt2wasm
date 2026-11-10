@@ -4,6 +4,7 @@ without them:
   wasm-tools       to validate generated WIT
   wit-bindgen      + host Qt6Core (pkg-config) for the native glue test
   qdoc             (QT2WASM_QDOC, PATH, /usr/lib/qt6/bin/qdoc) for the docs test
+  qhelpgenerator   (QT2WASM_QHELPGENERATOR, PATH, /usr/lib/qt6/libexec) for .qch
 """
 
 from __future__ import annotations
@@ -322,6 +323,42 @@ def test_qdoc_documents_counter_example(tmp_path):
         "examples/counter/counter.wit is stale: copy qt2wasm/build/counter.wit "
         "over it after `pixi run examples`"
     )
+
+
+def test_qhp_conf_names():
+    assert docs.help_id("my-comp 2") == "my_comp_2"
+    conf = "\n".join(docs.qhp_conf("my-comp", "1.2"))
+    assert "qhp.projects = my_comp" in conf
+    assert "qhp.my_comp.namespace = org.qt2wasm.my_comp.1_2" in conf
+    assert "qhp.my_comp.file = my_comp.qhp" in conf
+    assert "version = 1.2" in conf
+
+
+QHG = docs.find_qhelpgenerator()
+
+
+@pytest.mark.skipif(not QDOC or not QHG, reason="needs qdoc and qhelpgenerator")
+def test_qch_for_counter_example(tmp_path):
+    import sqlite3
+
+    proj = ROOT / "examples" / "counter"
+    out, _ = docs.run_qch(
+        QDOC,
+        QHG,
+        proj,
+        tmp_path / "qch",
+        tmp_path / "counter.qch",
+        [ROOT / "include", proj, *docs.qt_includes()],
+        exclude=[proj / "build"],
+    )
+    db = sqlite3.connect(out)
+    assert db.execute("select Name from NamespaceTable").fetchall() == [
+        ("org.qt2wasm.counter",)
+    ]
+    files = {r[0] for r in db.execute("select Name from FileNameTable")}
+    assert {"counter.html", "counter-module.html"} <= files
+    keys = {r[0] for r in db.execute("select Name from IndexTable")}
+    assert "Counter" in keys
 
 
 def _pkg(name):

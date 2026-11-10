@@ -4,6 +4,7 @@ qt2wasm build PROJECT [-o out.wasm]   Qt CMake project -> WASI component
 qt2wasm wit HEADER.json... [-o x.wit] moc metatypes -> WIT (Qt-first);
                                       --docs-from DIR adds the Qt docs (qdoc)
 qt2wasm glue HEADER.json... --bindings component.h -o glue.cpp
+qt2wasm qch DIR [-o name.qch]          qdoc comments in DIR -> Qt Help (.qch)
 """
 
 from __future__ import annotations
@@ -48,6 +49,37 @@ def _docs(a):
     return d
 
 
+def _qch(a):
+    import tempfile
+
+    from qt2wasm import docs
+    from qt2wasm.build import ROOT
+
+    qdoc, qhg = docs.find_qdoc(), docs.find_qhelpgenerator()
+    if qdoc is None or qhg is None:
+        raise model.Qt2WasmError(
+            "qch: needs qdoc and qhelpgenerator (QT2WASM_QDOC / "
+            "QT2WASM_QHELPGENERATOR, PATH, or /usr/lib/qt6/{bin,libexec})"
+        )
+    proj = Path(a.project).resolve()
+    out = Path(a.output or f"{proj.name}.qch").resolve()
+    incs = [Path(i) for i in a.includes] + [ROOT / "include", proj]
+    incs += docs.qt_includes()
+    with tempfile.TemporaryDirectory(prefix="qt2wasm-qch-") as tmp:
+        docs.run_qch(
+            qdoc,
+            qhg,
+            proj,
+            Path(tmp),
+            out,
+            [i for i in incs if i.is_dir()],
+            exclude=[proj / "build"],
+            name=a.name or out.stem,
+            version=a.version,
+        )
+    print(out)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="qt2wasm",
@@ -88,6 +120,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Qt doc comments -> WIT /// docs: auto (qdoc if found, the default), "
         "qdoc (required), none",
     )
+    b.add_argument(
+        "--qch",
+        choices=["auto", "always", "none"],
+        default="auto",
+        help="Qt Help file <name>.qch next to the component, from qdoc HTML + "
+        "qhelpgenerator: auto (when both are found, the default), always "
+        "(required), none",
+    )
     b.add_argument("--opt", choices=["size", "speed"], default="size")
     b.add_argument(
         "--lto",
@@ -124,6 +164,19 @@ def main(argv: list[str] | None = None) -> int:
         "qt2wasm's are added from QT2WASM_QT_PREFIX / the checkout)",
     )
 
+    h = sub.add_parser("qch", help="qdoc comments in a project -> Qt Help (.qch)")
+    h.add_argument("project", help="directory with the /*! */ comments")
+    h.add_argument("-o", "--output", help="the .qch (default ./<dirname>.qch)")
+    h.add_argument("--name", help="help project name (default: the .qch's stem)")
+    h.add_argument("--version", default="", help="version for the help namespace")
+    h.add_argument(
+        "-I",
+        dest="includes",
+        action="append",
+        default=[],
+        help="include dir for qdoc's clang (repeatable)",
+    )
+
     g = sub.add_parser("glue", help="metatypes + wit-bindgen C header -> C++ glue")
     g.add_argument("json", nargs="+")
     g.add_argument("--bindings", required=True, help="the header `wit-bindgen c` wrote")
@@ -141,6 +194,8 @@ def main(argv: list[str] | None = None) -> int:
                 Path(a.output).write_text(text)
             else:
                 sys.stdout.write(text)
+        elif a.cmd == "qch":
+            _qch(a)
         elif a.cmd == "glue":
             Path(a.output).write_text(
                 gluegen.generate(_model(a.json), Path(a.bindings))

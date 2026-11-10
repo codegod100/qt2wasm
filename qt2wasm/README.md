@@ -161,6 +161,25 @@ dependency of the package yet. On Debian or Ubuntu, `apt install
 qt6-documentation-tools` gives `/usr/lib/qt6/bin/qdoc` (6.4 tested), or set
 `QT2WASM_QDOC`.
 
+### Qt Help: a `.qch` next to the component
+
+When qhelpgenerator is found too, `qt2wasm build` also writes `<name>.qch`
+next to the `.wasm` and `.wit`: qdoc renders the same comments as HTML with a
+Qt Help project (`.qhp`), and qhelpgenerator packs it. Open it in Qt Assistant
+or add it in Qt Creator (Preferences, Help, Documentation). The front page is a
+`\module <name>` page listing the classes; write your own `\module` comment to
+replace it. The help namespace is `org.qt2wasm.<name>`.
+
+`--qch auto` (the default) makes it when qdoc and qhelpgenerator are both found
+and skips it quietly otherwise, `--qch always` makes a missing tool or a failure
+an error, and `--qch none` (or `--docs none`) turns it off. Without a build,
+`qt2wasm qch DIR [-o name.qch] [--version 1.0]` makes one from a directory of
+sources. The pages and `.qhp` stay in `build/qt2wasm/gen/qch/`.
+
+qhelpgenerator comes from qttools too: on Debian or Ubuntu, `apt install
+qt6-tools-dev-tools` gives `/usr/lib/qt6/libexec/qhelpgenerator` (6.4 tested),
+or set `QT2WASM_QHELPGENERATOR`.
+
 ## Writing a component (WIT-first)
 
 `qt2wasm build PROJECT --wit path/to/wit --world my-world` skips the WIT and
@@ -194,6 +213,7 @@ one.
 | preview1 reactor adapter | `QT2WASM_ADAPTER`, `$CONDA_PREFIX/share/wasi-preview1-adapter/` | wasmtime 36 |
 | fontTools (optional, subsetting) | Python | 4.x |
 | qdoc (optional, WIT docs) | `QT2WASM_QDOC`, `PATH`, `/usr/lib/qt6/bin/qdoc` | 6.4 |
+| qhelpgenerator (optional, `.qch`) | `QT2WASM_QHELPGENERATOR`, `PATH`, `/usr/lib/qt6/libexec/qhelpgenerator` | 6.4 |
 
 ## Measured (2026-11-09)
 

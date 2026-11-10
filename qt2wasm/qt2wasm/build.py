@@ -8,7 +8,9 @@ Steps (each logged with its time):
   3. codegen             Qt-first: WIT + C++ glue from the metatypes, with
                          the Qt doc comments as WIT /// docs when qdoc is
                          found (--docs). The WIT is also written next to
-                         the component as <name>.wit.
+                         the component as <name>.wit, and, when qdoc and
+                         qhelpgenerator are found, the Qt Help file
+                         <name>.qch (--qch).
                          WIT-first (--wit): bindings only, you implement them.
   4. cmake               configure + build with the Qt WASI toolchain file
   5. optimise            wasm-opt on the core module (keeps the WIT section)
@@ -278,6 +280,48 @@ def project_docs(args, tools: Tools, project: Path, bdir: Path, gen: Path):
     return docs
 
 
+def project_qch(args, tools: Tools, project: Path, bdir: Path, gen: Path, out: Path):
+    """qdoc HTML + qhelpgenerator -> <out>.qch, or None. --qch auto (default)
+    skips quietly when either tool is missing and warns if one fails;
+    --qch always makes either an error. --docs none turns it off too."""
+    mode = getattr(args, "qch", "auto") or "auto"
+    if mode == "none" or getattr(args, "docs", "auto") == "none":
+        return None
+    qdoc, qhg = qdocs.find_qdoc(), qdocs.find_qhelpgenerator()
+    if qdoc is None or qhg is None:
+        missing = " and ".join(
+            n for n, t in (("qdoc", qdoc), ("qhelpgenerator", qhg)) if t is None
+        )
+        if mode == "always":
+            raise BuildError(
+                f"--qch always: {missing} not found (QT2WASM_QDOC / "
+                "QT2WASM_QHELPGENERATOR, PATH, or Debian's qt6-documentation-tools "
+                "and qt6-tools-dev-tools)"
+            )
+        log(f"qch: no {missing} found, no Qt Help file")
+        return None
+    qch = out.with_suffix(".qch")
+    try:
+        qch, qlog = qdocs.run_qch(
+            qdoc,
+            qhg,
+            project,
+            gen / "qch",
+            qch,
+            qdoc_includes(tools, project),
+            exclude=[bdir, project / "build"],
+            name=out.stem,
+        )
+    except Exception as e:
+        if mode == "always":
+            raise BuildError(str(e)) from e
+        log(f"qch: failed, no Qt Help file: {str(e).splitlines()[0]}")
+        return None
+    (gen / "qch" / "qch.log").write_text(qlog)
+    log(f"qch: {qch}")
+    return qch
+
+
 def build(args) -> Path:
     t0 = time.time()
     project = Path(args.project).resolve()
@@ -362,6 +406,8 @@ def build(args) -> Path:
     if not args.wit:
         out.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(wit_dir / "component.wit", out.with_suffix(".wit"))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    project_qch(args, tools, project, bdir, gen, out)
     if args.font:
         fonts = [Path(f).resolve() for f in args.font]
         if args.font_subset != "none":
