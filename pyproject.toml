@@ -1,0 +1,15 @@
+[project]
+name = "qt2wasm"
+version = "0.1.0"
+description = "Build Qt C++ into WASI WebAssembly components"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+fonts = ["fonttools"]
+test = ["pytest", "wasmtime"]
+
+[project.scripts]
+qt2wasm = "qt2wasm.cli:main"
+
+[tool.setuptools]
+packages = ["qt2wasm"]
