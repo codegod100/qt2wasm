@@ -175,6 +175,9 @@ and skips it quietly otherwise, `--qch always` makes a missing tool or a failure
 an error, and `--qch none` (or `--docs none`) turns it off. Without a build,
 `qt2wasm qch DIR [-o name.qch] [--version 1.0]` makes one from a directory of
 sources. The pages and `.qhp` stay in `build/qt2wasm/gen/qch/`.
+`examples/counter/counter.qch` is a checked-in sample (made with qdoc and
+qhelpgenerator 6.4; regenerate with `qt2wasm qch examples/counter -o
+examples/counter/counter.qch`).
 
 qhelpgenerator comes from qttools too: on Debian or Ubuntu, `apt install
 qt6-tools-dev-tools` gives `/usr/lib/qt6/libexec/qhelpgenerator` (6.4 tested),
