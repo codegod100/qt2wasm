@@ -19,6 +19,9 @@ Steps (each logged with its time):
   5. optimise            wasm-opt on the core module (keeps the WIT section)
   6. componentise        wasm-tools component new --adapt (preview1 reactor)
   7. check               validate, print the world and the WASI imports
+  8. js                  jco transpile -> <name>-js/: ES module + .d.ts and a
+                         load() helper with the WASI preview2 shim, runnable
+                         with plain node (--js; jco is a qt2wasm dependency)
 """
 
 from __future__ import annotations
@@ -327,6 +330,33 @@ def project_site(args, tools: Tools, wit: Path, out: Path):
     return site
 
 
+def project_js(args, out: Path):
+    """<out>-js/: jco transpile + loader (qt2wasm.jsgen), or None. --js auto
+    (default) skips quietly without jco and warns if it fails; --js always
+    makes either an error; --js none turns it off."""
+    from qt2wasm import jsgen
+
+    mode = getattr(args, "js", "auto") or "auto"
+    if mode == "none":
+        return None
+    jco = jsgen.find_jco()
+    if jco is None:
+        if mode == "always":
+            raise BuildError("--js always: jco not found (install jco from "
+                             "https://prefix.dev/nandi-testing, or set QT2WASM_JCO)")
+        log("js: no jco found, no JS bindings (set QT2WASM_JCO)")
+        return None
+    try:
+        dst = jsgen.transpile(out, out.parent / f"{out.stem}-js", out.stem, jco)
+    except jsgen.JsError as e:
+        if mode == "always":
+            raise BuildError(str(e)) from e
+        log(f"js: failed, no JS bindings: {str(e).splitlines()[0]}")
+        return None
+    log(f"js: {dst / 'index.js'} (jco {jco})")
+    return dst
+
+
 def project_qch(args, tools: Tools, project: Path, bdir: Path, gen: Path, out: Path):
     """qdoc HTML + qhelpgenerator -> <out>.qch, or None. --qch auto (default)
     skips quietly when either tool is missing and warns if one fails;
@@ -540,4 +570,5 @@ def build(args) -> Path:
     for label, n in sizes:
         log(f"  {label:<20} {n / 1e6:8.2f} MB")
     log("  imports: " + (", ".join(imports) or "none"))
+    project_js(args, out)
     return out

@@ -9,6 +9,9 @@ qt2wasm markdown APP.wit [-o DIR]     WIT -> Markdown (wit-bindgen markdown)
 qt2wasm mkdocs APP.wit... -o DIR      docs site project (mkdocs.yml) from the
                                       WIT; --build builds it with Zensical
                                       (or MkDocs)
+qt2wasm js APP.wasm [-o DIR]          component -> JS bindings (jco transpile
+                                      + load() with the WASI shim); `build`
+                                      does this by default as <name>-js/
 """
 
 from __future__ import annotations
@@ -141,6 +144,14 @@ def main(argv: list[str] | None = None) -> int:
         "none (<name>.md only)",
     )
     b.add_argument(
+        "--js",
+        choices=["auto", "always", "none"],
+        default="auto",
+        help="JS bindings <name>-js/ (jco transpile + a load() helper with the "
+        "WASI shim, runs under node): auto (when jco is found, the default), "
+        "always (required), none",
+    )
+    b.add_argument(
         "--docs-only",
         action="store_true",
         help="stop after the docs: moc, qdoc and codegen write <name>.wit, .md, "
@@ -226,6 +237,11 @@ def main(argv: list[str] | None = None) -> int:
         "--builder", choices=["zensical", "mkdocs"], help="force one site builder"
     )
 
+    js = sub.add_parser("js", help="component -> JS bindings (jco transpile + loader)")
+    js.add_argument("wasm", help="the component .wasm")
+    js.add_argument("-o", "--output", help="directory (default <name>-js next to it)")
+    js.add_argument("--name", help="module name (default: the .wasm's stem)")
+
     a = ap.parse_args(argv)
     try:
         if a.cmd == "build":
@@ -257,6 +273,19 @@ def main(argv: list[str] | None = None) -> int:
             print(cfg)
             if a.build:
                 print(mdsite.build_site(cfg, builder=a.builder) / "index.html")
+        elif a.cmd == "js":
+            from qt2wasm import jsgen
+
+            wasm = Path(a.wasm).resolve()
+            jco = jsgen.find_jco()
+            if jco is None:
+                raise model.Qt2WasmError("js: jco not found (PATH or QT2WASM_JCO)")
+            name = a.name or wasm.stem
+            dst = Path(a.output).resolve() if a.output else wasm.parent / f"{name}-js"
+            try:
+                print(jsgen.transpile(wasm, dst, name, jco) / "index.js")
+            except jsgen.JsError as e:
+                raise model.Qt2WasmError(str(e)) from e
         elif a.cmd == "glue":
             Path(a.output).write_text(
                 gluegen.generate(_model(a.json), Path(a.bindings))

@@ -2,7 +2,8 @@
 # Forge CI: install the dev env (pixi.toml: the published toolchain packages,
 # nothing compiled but our own code), run the qt2wasm tests and examples from
 # this checkout, then build and run both examples with the published qt2wasm
-# package on its own, in a throwaway env that has nothing from this checkout.
+# package on its own, in a throwaway env that has nothing from this checkout,
+# including the JS bindings (<name>-js/, jco) under Node.
 set -euo pipefail
 curl -fsSL https://github.com/prefix-dev/pixi/releases/download/v0.84.1/pixi-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /usr/local/bin pixi
 pixi --version
@@ -18,4 +19,7 @@ $pub build qt2wasm/examples/counter -o /tmp/pub-counter.wasm
 $pub build qt2wasm/examples/canvas --font "$font" -o /tmp/pub-canvas.wasm
 pixi run python qt2wasm/tests/run_counter.py /tmp/pub-counter.wasm
 pixi run python qt2wasm/tests/run_canvas.py /tmp/pub-canvas.wasm /tmp/pub-canvas.png
+# the JS bindings the published package writes by default (jco is a dependency)
+pixi run node qt2wasm/tests/run_counter_js.mjs /tmp/pub-counter-js
+pixi run node qt2wasm/tests/run_canvas_js.mjs /tmp/pub-canvas-js
 echo "qt2wasm $v: checkout and published package both OK"

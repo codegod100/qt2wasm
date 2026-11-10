@@ -1,6 +1,6 @@
 # Development environment for qt2wasm: the published toolchain packages (built
 # from recipes/ in this repo), Python, wasmtime-py, pytest, rattler-build and
-# just. qt2wasm itself runs from the qt2wasm/ checkout, so tests always check the
+# just, jco (+ nodejs). qt2wasm itself runs from the qt2wasm/ checkout, so tests always check the
 # code you changed. Nothing is compiled at install time.
 #
 # Every command is a pixi task below; the justfile only aliases them
@@ -37,6 +37,7 @@ qt6-wasi = { version = "6.8.3.*", channel = "https://prefix.dev/nandi-testing" }
 wit-bindgen = { version = "0.46.*", channel = "https://prefix.dev/nandi-testing" }
 wasm-tools = { version = "1.239.*", channel = "https://prefix.dev/nandi-testing" }
 wasi-preview1-adapter = { version = "36.*", channel = "https://prefix.dev/nandi-testing" }
+jco = { version = "1.41.*", channel = "https://prefix.dev/nandi-testing" }
 mkdocs = ">=1.6.1,<2"
 zensical = ">=0.1.0,<0.2"
 
@@ -54,8 +55,8 @@ inputs = ["qt2wasm/qt2wasm/**", "qt2wasm/cmake/**", "qt2wasm/include/**", "qt2wa
 outputs = ["qt2wasm/build/counter.wasm", "qt2wasm/build/canvas.wasm"]
 
 [tasks.run]
-description = "Run both examples under wasmtime; saves qt2wasm/build/canvas.png"
-cmd = "python qt2wasm/tests/run_counter.py qt2wasm/build/counter.wasm && python qt2wasm/tests/run_canvas.py qt2wasm/build/canvas.wasm qt2wasm/build/canvas.png"
+description = "Run both examples under wasmtime and their JS bindings under Node; saves qt2wasm/build/canvas.png"
+cmd = "python qt2wasm/tests/run_counter.py qt2wasm/build/counter.wasm && python qt2wasm/tests/run_canvas.py qt2wasm/build/canvas.wasm qt2wasm/build/canvas.png && node qt2wasm/tests/run_counter_js.mjs qt2wasm/build/counter-js && node qt2wasm/tests/run_canvas_js.mjs qt2wasm/build/canvas-js"
 depends-on = ["examples"]
 
 [tasks.test]

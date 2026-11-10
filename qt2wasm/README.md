@@ -230,6 +230,41 @@ qt2wasm tidies wit-bindgen's Markdown for Python-Markdown: wit-bindgen puts
 enum-case and field docs after a bare `<p>`, which would be read as a raw
 HTML block that swallows the rest of the page.
 
+### JS bindings: `<name>-js/` with jco
+
+Every `qt2wasm build` also writes `<name>-js/` next to the `.wasm`: the
+component transpiled by [jco](https://github.com/bytecodealliance/jco)
+(`jco transpile --instantiation async`: ES module, core `.wasm` files and
+TypeScript `.d.ts` for every interface), plus `index.js`/`index.d.ts` with a
+`load(hostImports)` helper that wires in the WASI preview2 shim, and a
+`package.json`. The shim (pure JS, ~1 MB) is copied into
+`<name>-js/node_modules/`, so the directory runs with plain `node`, no npm
+step, wherever you move it:
+
+```js
+import { load } from './counter-js/index.js';
+const { counter } = await load({
+  // the component's own imports (the Qt signals), keys without @version
+  'demo:counter/counter-events': {
+    valueChanged: (source, value) => console.log('value', value),
+    overflowed: (source, why, at) => console.log(why, at),
+  },
+});
+const c = new counter.Counter();
+c.setValue(5);
+c.step();
+console.log(c.value(), c.describe('n='));
+```
+
+Static Qt runs fine on the jco WASI shims: `tests/run_counter_js.mjs` and
+`tests/run_canvas_js.mjs` make the same checks as the wasmtime-py tests
+(signals, records, enums, flags, `option`, `list<u8>` images). jco is a
+dependency of the conda package (`jco` on prefix.dev/nandi-testing, built
+from `recipes/jco`, with nodejs from conda-forge), so the bindings are always
+made. `--js auto` (the default) skips them quietly without jco, `--js always`
+makes a missing jco or a failed transpile an error, `--js none` turns them
+off. `qt2wasm js app.wasm [-o DIR]` does the same for any component.
+
 ## Writing a component (WIT-first)
 
 `qt2wasm build PROJECT --wit path/to/wit --world my-world` skips the WIT and
@@ -265,6 +300,7 @@ one.
 | qdoc (optional, WIT docs) | `QT2WASM_QDOC`, `PATH`, `/usr/lib/qt6/bin/qdoc` | 6.4 |
 | qhelpgenerator (optional, `.qch`) | `QT2WASM_QHELPGENERATOR`, `PATH`, `/usr/lib/qt6/libexec/qhelpgenerator` | 6.4 |
 | zensical, or mkdocs (docs site) | `QT2WASM_SITE_BUILDER`, `PATH`, Python | zensical 0.1, mkdocs 1.6 |
+| jco (JS bindings) | `QT2WASM_JCO`, `PATH`, `$CONDA_PREFIX/bin` | 1.41.0 (preview2-shim 0.31) |
 
 ## Measured (2026-11-09)
 

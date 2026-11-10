@@ -13,7 +13,8 @@ Two layers live in this repo:
 - **qt2wasm** is the tool on top: a Python command that turns a Qt class into a
   WebAssembly **component**. It reads the class with moc, generates WIT and C++
   glue from `Q_INVOKABLE`s, properties, signals and enums, links against
-  qt6-wasi and wraps the result with wasm-tools and the preview1 adapter.
+  qt6-wasi and wraps the result with wasm-tools and the preview1 adapter,
+  then writes JS/TypeScript bindings for Node with jco.
 
 ## Packages
 
@@ -21,13 +22,14 @@ All are linux-64 conda packages on [prefix.dev/nandi-testing](https://prefix.dev
 
 | Package | Version | What |
 | --- | --- | --- |
-| `qt2wasm` | 0.7.3 | the qt2wasm command, CMake module, headers and runtime; depends on everything below |
+| `qt2wasm` | 0.8.0 | the qt2wasm command, CMake module, headers and runtime; depends on everything below |
 | `qt6-wasi` | 6.8.3 | Qt for WASI (`$PREFIX/opt/qt6-wasi`) |
 | `wasi-sdk` | 27.0 | clang 20, lld, wasi-libc, libc++ (`$PREFIX/opt/wasi-sdk`) |
 | `wit-bindgen` | 0.46.0 | upstream binary |
 | `wasm-tools` | 1.239.0 | upstream binary |
 | `wasi-preview1-adapter` | 36.0.0 | wasmtime's `wasi_snapshot_preview1.reactor.wasm` |
 | `wasmtime` | 36.0.0 | the wasmtime CLI |
+| `jco` | 1.41.0 | `@bytecodealliance/jco` from npm on conda-forge nodejs (`jco transpile` etc.) |
 
 Nothing is compiled when you install: Qt and the tools are prebuilt in CI.
 

@@ -10,7 +10,7 @@ preview = ["pixi-build"]
 
 [package]
 name = "qt2wasm"
-version = "0.7.3"
+version = "0.8.0"
 description = "Build Qt C++ into WASI WebAssembly components"
 homepage = "https://fileapi.fastapicloud.dev/forge/#nandi.uk/qt2wasm"
 
@@ -21,7 +21,7 @@ backend = { name = "pixi-build-python", version = "*" }
 hatchling = "*"
 
 # The whole toolchain, prebuilt: qt6-wasi (Qt for WASI + host moc + toolchain
-# file; depends on wasi-sdk), wit-bindgen, wasm-tools and the preview1 adapter
+# file; depends on wasi-sdk), wit-bindgen, wasm-tools, the preview1 adapter and jco
 # come from prefix.dev/nandi-testing (built from recipes/ in this repo), the rest from conda-forge.
 [package.run-dependencies]
 python = ">=3.10"
@@ -34,3 +34,6 @@ wit-bindgen = "0.46.*"
 wasm-tools = "1.239.*"
 wasi-preview1-adapter = "36.*"
 zensical = ">=0.1"
+# jco (npm, on conda-forge nodejs; recipes/jco): `qt2wasm build` writes JS
+# bindings <name>-js/ with it.
+jco = "1.41.*"

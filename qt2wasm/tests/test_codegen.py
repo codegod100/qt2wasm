@@ -540,3 +540,23 @@ def test_built_component_runs(name, tmp_path):
     spec.loader.exec_module(mod)
     args = (path, str(tmp_path / "out.png")) if name == "canvas" else (path,)
     assert mod.main(*args) == 0
+
+
+@pytest.mark.parametrize("name", ["counter", "canvas"])
+def test_built_component_js_bindings_run(name):
+    """qt2wasm build's <name>-js/ (jco) under Node: same checks as wasmtime."""
+    path = COMPONENTS[name]
+    if not path:
+        pytest.skip(f"QT2WASM_TEST_{name.upper()} not set")
+    js = Path(path).with_name(f"{Path(path).stem}-js")
+    node = shutil.which("node")
+    if node is None or not js.is_dir():
+        pytest.skip(f"no node or no {js} (jco missing at build time)")
+    for f in ("index.js", "index.d.ts", "package.json", f"{name}.d.ts"):
+        assert (js / f).is_file(), f
+    assert (js / "node_modules/@bytecodealliance/preview2-shim/package.json").is_file()
+    r = subprocess.run(
+        [node, str(HERE / f"run_{name}_js.mjs"), str(js)], capture_output=True, text=True
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "JS bindings OK" in r.stdout
