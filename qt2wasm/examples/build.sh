@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build the counter (QtCore) and canvas (QtGui) examples into tools/qt2wasm/build/
-# (`pixi run qt2wasm-examples`). Needs the qt6-wasi toolchain packages (the wasm pixi env).
+# Build the counter (QtCore) and canvas (QtGui) examples into qt2wasm/build/
+# (`pixi run examples` at the repo root). Needs the qt6-wasi toolchain packages.
 # The canvas example embeds a TTF: QT2WASM_FONT, else the first DejaVu/Arial found.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)

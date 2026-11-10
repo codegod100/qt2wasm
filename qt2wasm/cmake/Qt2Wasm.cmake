@@ -3,7 +3,7 @@
 # `qt2wasm build` configures the project with the Qt WASI toolchain file
 # (wasm/qt/cmake/wasi-qt.cmake) and these cache variables:
 #
-#   QT2WASM_ROOT       tools/qt2wasm (this file's parent)
+#   QT2WASM_ROOT       qt2wasm/ in nandi.uk/qt2wasm (this file's parent)
 #   QT2WASM_QT_PREFIX  the Qt-for-WASI install prefix (static qtbase)
 #   QT2WASM_GEN_DIR    generated glue, moc output and wit-bindgen bindings
 #   QT2WASM_COMPAT_DIR compat/ from the Qt WASI toolchain (wasi_compat.c)

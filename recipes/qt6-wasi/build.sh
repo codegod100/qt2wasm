@@ -6,11 +6,25 @@ set -euxo pipefail
 Q=$PREFIX/opt/qt6-wasi
 jobs=${CPU_COUNT:-$(nproc)}
 mkdir -p "$Q"
+
+# ccache, when CI mounts its persistent Depot cache at /root/.ccache (see
+# ci/build.Dockerfile): a rebuild then mostly hits the cache instead of taking
+# ~30 min. Paths are made relative to the build root, so rattler-build's
+# per-build work directories don't defeat it. Without the mount: no ccache.
+launcher=()
+ccache_dir=${QT_WASI_CCACHE_DIR:-/root/.ccache}
+if command -v ccache >/dev/null && [ -d "$ccache_dir" ] && [ -w "$ccache_dir" ]; then
+    export CCACHE_DIR=$ccache_dir CCACHE_BASEDIR=$(dirname "$SRC_DIR") CCACHE_NOHASHDIR=1 \
+        CCACHE_COMPILERCHECK=content CCACHE_MAXSIZE=5G \
+        CCACHE_SLOPPINESS=include_file_mtime,include_file_ctime,time_macros,pch_defines
+    launcher=(-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache)
+    ccache -z
+fi
 cp -r wasiqt/cmake wasiqt/compat "$Q/"
 cp -r wasiqt/mkspecs/wasi-clang qtbase/mkspecs/
 
 # 1. Native host Qt (moc, rcc, cmake tooling for QT_HOST_PATH), minimal features.
-cmake -S qtbase -B build-host -G Ninja ${CMAKE_ARGS:-} \
+cmake -S qtbase -B build-host -G Ninja ${CMAKE_ARGS:-} "${launcher[@]}" \
     -DCMAKE_INSTALL_PREFIX="$Q/host" -DCMAKE_BUILD_TYPE=Release \
     -DQT_BUILD_EXAMPLES=OFF -DQT_BUILD_TESTS=OFF \
     -DFEATURE_xcb=OFF -DFEATURE_opengl=OFF -DINPUT_opengl=no -DFEATURE_widgets=OFF -DFEATURE_dbus=OFF \
@@ -30,17 +44,19 @@ cmake --install build-host
 #    install prefix into a 256-byte buffer (qconfig.cpp), which conda's long
 #    placeholder $PREFIX overflows, so install to a short staging prefix and
 #    move it into place, rewriting the staging path in text files.
-stage=/tmp/qt6-wasi-stage-$$
+stage=/tmp/qt6-wasi-stage  # fixed, so it hashes the same for ccache
 rm -rf "$stage"
 env -u CFLAGS -u CXXFLAGS -u CPPFLAGS -u LDFLAGS -u CC -u CXX -u CPP -u AR -u RANLIB -u NM -u LD \
     -u STRIP -u OBJCOPY -u OBJDUMP -u CMAKE_ARGS -u CMAKE_PREFIX_PATH -u PKG_CONFIG_PATH \
     WASI_SDK_PREFIX="$PREFIX/opt/wasi-sdk" QT_HOST_PATH="$Q/host" QT_WASI_PREFIX="$stage" \
     bash wasiqt/configure-wasi.sh "$PWD/qtbase" "$PWD/build-wasi" \
-        -DCMAKE_TOOLCHAIN_FILE="$Q/cmake/wasi-qt.cmake" -DWASI_SDK_PREFIX="$PREFIX/opt/wasi-sdk"
+        -DCMAKE_TOOLCHAIN_FILE="$Q/cmake/wasi-qt.cmake" -DWASI_SDK_PREFIX="$PREFIX/opt/wasi-sdk" "${launcher[@]}"
 env -u CFLAGS -u CXXFLAGS -u LDFLAGS cmake --build build-wasi --parallel "$jobs"
 cmake --install build-wasi
 mv "$stage" "$Q/wasi"
 grep -rlI --null -F "$stage" "$Q/wasi" | xargs -0 -r sed -i "s|$stage|$Q/wasi|g"
+
+[ ${#launcher[@]} -eq 0 ] || ccache -s
 
 # Docs and the host Qt's static helper sources aren't needed.
 rm -rf "$Q/host/doc" "$Q/wasi/doc"

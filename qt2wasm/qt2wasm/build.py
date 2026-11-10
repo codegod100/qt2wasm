@@ -28,7 +28,7 @@ from qt2wasm import gluegen, model, witgen
 
 _PKG = Path(__file__).resolve().parent
 # Installed (conda/pip): cmake/, include/ and runtime/ ship inside the package
-# as _data/. From a checkout: tools/qt2wasm itself.
+# as _data/. From a checkout: the qt2wasm/ directory itself.
 ROOT = _PKG / "_data" if (_PKG / "_data" / "cmake").is_dir() else _PKG.parent
 
 

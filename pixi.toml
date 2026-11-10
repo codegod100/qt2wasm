@@ -1,0 +1,52 @@
+# Development environment for qt2wasm: the published toolchain packages (built
+# from recipes/ in this repo), Python, wasmtime-py and pytest. qt2wasm itself
+# runs from the qt2wasm/ checkout, so tests always check the code you changed.
+# Nothing is compiled at install time.
+#   pixi run test        codegen tests + build and run both examples
+#   pixi run run         build the examples and run them under wasmtime
+#   pixi run qt2wasm build path/to/project -o app.wasm
+# The qt2wasm conda package itself is qt2wasm/pixi.toml (pixi-build); the
+# toolchain packages are recipes/ (rattler-build); example/ is a plain Qt-for-WASI
+# program without qt2wasm. CI for all of them: .forge/jobs.toml.
+[workspace]
+name = "qt2wasm-dev"
+channels = ["conda-forge", "https://prefix.dev/nandi-testing"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.10"
+cmake = ">=3.21"
+ninja = "*"
+binaryen = "*"
+fonttools = "*"
+pytest = "*"
+wasmtime-py = ">=40"
+font-ttf-dejavu-sans-mono = "*"
+qt6-wasi = { version = "6.8.3.*", channel = "https://prefix.dev/nandi-testing" }
+wit-bindgen = { version = "0.46.*", channel = "https://prefix.dev/nandi-testing" }
+wasm-tools = { version = "1.239.*", channel = "https://prefix.dev/nandi-testing" }
+wasi-preview1-adapter = { version = "36.*", channel = "https://prefix.dev/nandi-testing" }
+
+[activation.env]
+PYTHONPATH = "$PIXI_PROJECT_ROOT/qt2wasm"
+
+[tasks.qt2wasm]
+description = "Run qt2wasm from the checkout, e.g. `pixi run qt2wasm build path/to/project -o app.wasm`"
+cmd = "python -m qt2wasm"
+
+[tasks.examples]
+description = "Build the counter and canvas examples into qt2wasm/build/"
+cmd = "bash qt2wasm/examples/build.sh"
+inputs = ["qt2wasm/qt2wasm/**", "qt2wasm/cmake/**", "qt2wasm/include/**", "qt2wasm/runtime/**", "qt2wasm/examples/**"]
+outputs = ["qt2wasm/build/counter.wasm", "qt2wasm/build/canvas.wasm"]
+
+[tasks.run]
+description = "Run both examples under wasmtime; saves qt2wasm/build/canvas.png"
+cmd = "python qt2wasm/tests/run_counter.py qt2wasm/build/counter.wasm && python qt2wasm/tests/run_canvas.py qt2wasm/build/canvas.wasm qt2wasm/build/canvas.png"
+depends-on = ["examples"]
+
+[tasks.test]
+description = "qt2wasm tests: codegen, WIT validation and the built examples"
+cmd = "python -m pytest -q qt2wasm/tests"
+depends-on = ["examples"]
+env = { QT2WASM_TEST_COUNTER = "$PIXI_PROJECT_ROOT/qt2wasm/build/counter.wasm", QT2WASM_TEST_CANVAS = "$PIXI_PROJECT_ROOT/qt2wasm/build/canvas.wasm" }

@@ -1,1 +1,6 @@
 out/
+.pixi/
+qt2wasm/build/
+qt2wasm/dist/
+qt2wasm/build.log
+__pycache__/

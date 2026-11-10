@@ -21,35 +21,45 @@ pixi global install -c https://prefix.dev/nandi-testing -c conda-forge qt2wasm
 The conda package carries the `qt2wasm` command, its CMake module, headers and
 runtime, and depends on the whole toolchain as prebuilt packages: `qt6-wasi`
 (Qt for WASI, host moc, the toolchain file; pulls in `wasi-sdk`), `wit-bindgen`,
-`wasm-tools` and `wasi-preview1-adapter` from nandi-testing (built on Depot by
-nandi.uk/qt6-wasi, linux-64), plus cmake, ninja, binaryen and fontTools from
-conda-forge. Nothing is compiled at install time. It is built by the `qt2wasm-conda` job in `.forge/jobs.toml` on Depot
-with pixi-build and published when the version in `pixi.toml` and
-`pyproject.toml` is new.
+`wasm-tools` and `wasi-preview1-adapter` from nandi-testing (built from
+`recipes/` in this repo, linux-64), plus cmake, ninja, binaryen and fontTools
+from conda-forge. Nothing is compiled at install time. The `publish-qt2wasm`
+job in `.forge/jobs.toml` builds it with pixi-build on Depot and publishes it
+when the version in `pixi.toml` and `pyproject.toml` is new.
+
+In a pixi project:
+
+```toml
+[workspace]
+channels = ["conda-forge", "https://prefix.dev/nandi-testing"]
+platforms = ["linux-64"]
+
+[dependencies]
+qt2wasm = { version = "0.3.*", channel = "https://prefix.dev/nandi-testing" }
+```
+
+then `pixi run qt2wasm build path/to/project -o app.wasm` (add `--font some.ttf`
+for QtGui). It finds wasi-sdk, Qt, moc, wit-bindgen, wasm-tools and the adapter
+in the active env (see "Tools it looks for").
 
 ## Quick start: the examples
 
-From a ditherterm checkout, with [pixi](https://pixi.sh) and `just` on PATH
-(the `wasm` pixi env brings Python, wasmtime-py, cmake, ninja and Rust):
+From a checkout of this repo, with [pixi](https://pixi.sh), at the repo root
+(its `pixi.toml` installs the published toolchain, Python and wasmtime-py, and
+runs qt2wasm from this directory):
 
 ```sh
-pixi run qt2wasm-run    # builds everything it needs, then runs both examples
-                        # under wasmtime; writes build/canvas.png
-pixi run qt2wasm-test   # codegen tests + the built components
+pixi run run     # builds the examples, then runs both under wasmtime;
+                 # writes qt2wasm/build/canvas.png
+pixi run test    # codegen tests + the built components
+pixi run qt2wasm build path/to/project -o app.wasm
 ```
 
-These are pixi tasks chained with `depends-on`: `qt2wasm-run` and
-`qt2wasm-test` depend on `qt2wasm-examples` (builds `tools/qt2wasm/build/counter.wasm`
-and `canvas.wasm`, cached on its inputs). The `wasm` env installs the toolchain
-prebuilt (qt6-wasi, wasi-sdk, wit-bindgen, wasm-tools, the adapter), so there
-is no Qt build step. The `just qt2wasm-*` recipes are aliases of the same tasks. The canvas example compiles in a font: it uses
-DejaVu Sans from the pixi env or the system, or `QT2WASM_FONT=/path/to.ttf`.
-`wasm-opt` (binaryen) is optional; put it on PATH for the smaller sizes below.
-
-Your own project: `pixi run qt2wasm build path/to/project -o app.wasm` (add
-`--font some.ttf` for QtGui). Without just, run `python -m qt2wasm build ...`
-with `PYTHONPATH=tools/qt2wasm`; it finds wasi-sdk, Qt, moc, wit-bindgen,
-wasm-tools and the adapter in the active conda/pixi env (see "Tools it looks for").
+`run` and `test` depend on the `examples` task, which builds
+`qt2wasm/build/counter.wasm` and `canvas.wasm` and is cached on its inputs.
+The canvas example compiles in a font: DejaVu Sans (Mono) from the pixi env or
+the system, or `QT2WASM_FONT=/path/to.ttf`. `wasm-opt` (binaryen) is in the env
+and gives the smaller sizes below.
 
 ## Writing a component (Qt-first)
 
@@ -107,7 +117,7 @@ qt2wasm_add_component(counter SOURCES counter.cpp)      # add GUI for QtGui
 
 ## Writing a component (WIT-first)
 
-`qt2wasm build PROJECT --wit wasm/wit --world ditherterm` skips the WIT and
+`qt2wasm build PROJECT --wit path/to/wit --world my-world` skips the WIT and
 glue generation and only generates `wit-bindgen c` bindings for the given
 world; you define the `exports_*` functions it declares, converting with
 `qt2wasm::Conv<T>` from `qt2wasm/convert.h` (strings, lists, QImage, QColor,
@@ -145,7 +155,7 @@ one.
 | counter (QtCore only) | 4.83 MB | 2.31 MB | 2.36 MB |
 | canvas (QtGui, QPainter, DejaVu Sans subset 45 KB) | 9.06 MB | 6.45 MB | 6.50 MB |
 
-Both run under wasmtime-py (`just qt2wasm-run`, `just qt2wasm-test`).
+Both run under wasmtime-py (`pixi run run`, `pixi run test`).
 
 ## Not done yet
 

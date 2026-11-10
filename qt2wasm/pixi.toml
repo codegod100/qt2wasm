@@ -1,5 +1,6 @@
 # qt2wasm as a conda package, built with pixi-build (`pixi build` here, or the
-# fileapi CI job in .forge/jobs.toml, which publishes to prefix.dev/nandi-testing).
+# publish-qt2wasm job in the repo's .forge/jobs.toml, which publishes to
+# prefix.dev/nandi-testing).
 # Bump `version` here and in pyproject.toml to publish a new build.
 [workspace]
 name = "qt2wasm"
@@ -9,9 +10,9 @@ preview = ["pixi-build"]
 
 [package]
 name = "qt2wasm"
-version = "0.2.1"
+version = "0.3.0"
 description = "Build Qt C++ into WASI WebAssembly components"
-homepage = "https://fileapi.fastapicloud.dev/forge/#nandi.uk/ditherterm"
+homepage = "https://fileapi.fastapicloud.dev/forge/#nandi.uk/qt2wasm"
 
 [package.build]
 backend = { name = "pixi-build-python", version = "*" }
@@ -21,7 +22,7 @@ hatchling = "*"
 
 # The whole toolchain, prebuilt: qt6-wasi (Qt for WASI + host moc + toolchain
 # file; depends on wasi-sdk), wit-bindgen, wasm-tools and the preview1 adapter
-# come from prefix.dev/nandi-testing (nandi.uk/qt6-wasi), the rest from conda-forge.
+# come from prefix.dev/nandi-testing (built from recipes/ in this repo), the rest from conda-forge.
 [package.run-dependencies]
 python = ">=3.10"
 cmake = ">=3.21"

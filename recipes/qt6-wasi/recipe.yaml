@@ -39,6 +39,7 @@ requirements:
     - ${{ compiler('cxx') }}
     - cmake >=3.21
     - ninja
+    - ccache  # used only when CI mounts its cache (build.sh)
   host:
     - wasi-sdk 27.*
   run:
@@ -54,11 +55,11 @@ tests:
       - bash test/run.sh
 
 about:
-  homepage: https://fileapi.fastapicloud.dev/forge/#nandi.uk/qt6-wasi
+  homepage: https://fileapi.fastapicloud.dev/forge/#nandi.uk/qt2wasm
   license: LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
   summary: Static qtbase (QtCore, QtGui, offscreen QPA) for wasm32-wasip1 with host moc and a WASI toolchain file
   description: |
     qtbase 6.8.3 cross-built for wasm32-wasip1 with wasi-sdk 27: static, no
     threads, offscreen platform plugin, bundled FreeType/HarfBuzz/libpng/zlib,
     patched for WASI (Q_OS_WASI, no wake-up pipe, setjmp-free rasterisers).
-    See README.md in nandi.uk/qt6-wasi.
+    See README.md in nandi.uk/qt2wasm.

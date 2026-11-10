@@ -1,18 +1,46 @@
-# fileapi forge CI (runs on Depot). On every push to main: build each recipe in
-# recipes/ with rattler-build and publish the ones whose version/build number
-# isn't on prefix.dev/nandi-testing yet. qt6-wasi builds qtbase twice (host
-# tools + wasm32-wasip1), so it takes the forge maximum of one hour. See ci/publish.py.
-# Needs the PREFIX_TOKEN secret (a prefix.dev API key; the user secret works).
+# fileapi forge CI (https://fileapi.fastapicloud.dev/forge/#nandi.uk/qt2wasm).
+# Every job runs on Depot on each push to main. The forge has no path filters
+# and gives jobs a checkout without .git, so each publish job decides for
+# itself: it skips every package whose name + version (+ build number) is
+# already on prefix.dev/nandi-testing. A qt2wasm-only change never rebuilds Qt;
+# bump a recipe's version or build number to rebuild it.
+#
+# Secrets (user secrets): PREFIX_TOKEN (prefix.dev API key with write access to
+# nandi-testing), DEPOT_TOKEN and DEPOT_PROJECT_ID.
+
+# Toolchain packages from recipes/ (wasi-sdk, wit-bindgen, wasm-tools, the
+# preview1 adapter, qt6-wasi), built with rattler-build. Mentioning `depot`
+# gets the Depot CLI installed: each build is a `depot build` of
+# ci/build.Dockerfile with persistent cache mounts (packages, sources, ccache
+# for Qt), so a Qt rebuild is incremental. See ci/publish.py.
 [[job]]
-name = "publish"
+name = "publish-toolchain"
 branches = ["main"]
 timeout = 3600
-run = "python3 ci/publish.py"
+run = "depot --version && python3 ci/publish.py"
 
-# On every push to main: build and run example/ against the published packages
-# (a clean install from example/pixi.lock). See ci/example.sh.
+# The qt2wasm conda package (qt2wasm/pixi.toml, pixi-build), after the
+# toolchain it depends on. See qt2wasm/ci/publish_conda.py.
+[[job]]
+name = "publish-qt2wasm"
+branches = ["main"]
+after = "publish-toolchain"
+timeout = 1800
+run = "depot --version && python3 qt2wasm/ci/publish_conda.py"
+
+# example/: a plain Qt-for-WASI program built against the published packages.
 [[job]]
 name = "example"
 branches = ["main"]
+after = "publish-toolchain"
 timeout = 1800
 run = "bash ci/example.sh"
+
+# qt2wasm tests and examples from this checkout, then the same examples with
+# the published qt2wasm package. See ci/check_qt2wasm.sh.
+[[job]]
+name = "qt2wasm-check"
+branches = ["main"]
+after = "publish-qt2wasm"
+timeout = 1800
+run = "bash ci/check_qt2wasm.sh"

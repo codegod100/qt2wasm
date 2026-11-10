@@ -2,14 +2,22 @@
 rattler-build and publish them to prefix.dev/nandi-testing.
 
 Packages, in build order (later ones may depend on earlier ones):
-  wasi-sdk, wit-bindgen, wasm-tools, wasi-preview1-adapter  repackaged upstream releases
+  wasi-sdk, wit-bindgen, wasm-tools, wasi-preview1-adapter, wasmtime  repackaged upstream releases
   qt6-wasi                                                            qtbase 6.8.3 for wasm32-wasip1 (~30+ min)
 
-For each recipe: if nandi-testing already has that name + version, skip it
-(bump `version`, or the build number for a rebuild of the same version, to
-publish again). Otherwise build it with
+For each recipe: if nandi-testing already has that name + version + build
+number, skip it (bump `version`, or the build number for a rebuild of the same
+version, to publish again), so a push that only touches qt2wasm never rebuilds
+Qt. Otherwise build it with
 `rattler-build build -c https://prefix.dev/nandi-testing -c conda-forge` and
 upload it right away, so a later failure doesn't lose the earlier packages.
+
+Incremental builds: when the Depot CLI is on PATH (the forge installs it for a
+job whose `run` mentions depot), each recipe is built by `depot build` of
+ci/build.Dockerfile, whose BuildKit cache mounts Depot keeps between runs: the
+rattler package cache, the source cache (the qtbase tarball) and ccache, which
+the qt6-wasi build uses. A Qt rebuild then mostly hits ccache. Without depot it
+builds in place, uncached.
 
   python3 ci/publish.py [recipe ...]   # default: all, in order
 
@@ -19,6 +27,7 @@ Secret: PREFIX_TOKEN, a prefix.dev API key with write access to nandi-testing.
 from __future__ import annotations
 
 import json
+import shutil
 import os
 import re
 import subprocess
@@ -30,10 +39,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 RECIPES = HERE.parent / "recipes"
-ORDER = ["wasi-sdk", "wit-bindgen", "wasm-tools", "wasi-preview1-adapter", "qt6-wasi"]
+ORDER = ["wasi-sdk", "wit-bindgen", "wasm-tools", "wasi-preview1-adapter", "wasmtime", "qt6-wasi"]
 CHANNEL = "nandi-testing"
 CHANNEL_URL = f"https://prefix.dev/{CHANNEL}"
-UA = {"User-Agent": "qt6-wasi-ci/1"}
+UA = {"User-Agent": "qt2wasm-ci/1"}
 RATTLER_BUILD = "https://github.com/prefix-dev/rattler-build/releases/download/v0.80.0/rattler-build-x86_64-unknown-linux-musl"
 
 
@@ -75,10 +84,22 @@ def rattler_build() -> str:
     return str(exe)
 
 
+def build_cmd(exe: str, recipe: str, out: Path) -> list[str]:
+    if shutil.which("depot"):  # Depot BuildKit with persistent cache mounts (ci/build.Dockerfile)
+        cmd = ["depot", "build", "--progress", "plain", "--platform", "linux/amd64",
+               "-f", str(HERE / "build.Dockerfile"), "--build-arg", f"RECIPE={recipe}",
+               "--build-arg", f"RATTLER_BUILD_URL={RATTLER_BUILD}",
+               "--output", f"type=local,dest={out / recipe}", str(HERE.parent)]
+        if os.environ.get("DEPOT_PROJECT_ID"):
+            cmd[2:2] = ["--project", os.environ["DEPOT_PROJECT_ID"]]
+        return cmd
+    return [exe, "build", "--recipe", str(RECIPES / recipe), "--output-dir", str(out),
+            "-c", CHANNEL_URL, "-c", "conda-forge", "--log-style", "plain", "--color", "never"]
+
+
 def build(exe: str, recipe: str, out: Path) -> list[Path]:
     before = set(out.rglob("*.conda"))
-    cmd = [exe, "build", "--recipe", str(RECIPES / recipe), "--output-dir", str(out),
-           "-c", CHANNEL_URL, "-c", "conda-forge", "--log-style", "plain", "--color", "never"]
+    cmd = build_cmd(exe, recipe, out)
     say("$ " + " ".join(cmd))
     log = out / f"{recipe}.log"
     t0 = time.time()
@@ -90,6 +111,9 @@ def build(exe: str, recipe: str, out: Path) -> list[Path]:
             say(f"  [{int(time.time() - t0) // 60} min] {tail[0][:160]}")
     lines = log.read_text("utf-8", "replace").splitlines()
     say("\n".join(lines[-60:]))  # the job keeps only the tail of its output
+    stats = [ln for ln in lines if "Hits:" in ln or "Misses:" in ln or "Cacheable calls" in ln]
+    if stats:
+        say("ccache: " + " | ".join(ln.strip() for ln in stats[-4:]))
     if p.returncode != 0:
         sys.exit(f"{recipe}: build failed (exit {p.returncode})")
     return sorted(set(out.rglob("*.conda")) - before)

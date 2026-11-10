@@ -1,13 +1,16 @@
 """fileapi forge job: build the qt2wasm conda package on Depot with pixi-build
 and publish it to prefix.dev/nandi-testing.
 
-Runs from .forge/jobs.toml. Forge jobs already run on Depot (python:3.12
-image, no curl or Docker), so it builds in place; with the Depot CLI on PATH it
-builds ci/Dockerfile remotely instead.
+Runs from the repo's .forge/jobs.toml. Forge jobs already run on Depot
+(python:3.12 image, no Docker). With the Depot CLI on PATH (the forge installs
+it for a job whose `run` mentions depot) it builds qt2wasm/ci/Dockerfile with
+`depot build`, whose cache mounts (pixi/rattler package cache) Depot keeps
+between runs; otherwise it builds in place.
 
-1. Read the version from tools/qt2wasm/pixi.toml. If nandi-testing already has
-   qt2wasm at that version, stop: bump the version to publish again.
-2. `pixi build` the package into tools/qt2wasm/dist.
+1. Read the version from qt2wasm/pixi.toml. If nandi-testing already has
+   qt2wasm at that version, stop: bump the version to publish again. So a
+   change to the toolchain recipes never rebuilds qt2wasm, and the other way round.
+2. `pixi build` the package into qt2wasm/dist.
 3. Upload it with `pixi upload prefix` (pixi fetched from its GitHub release).
 
 Secrets (user secrets work): PREFIX_TOKEN, a prefix.dev API key with write
@@ -29,7 +32,7 @@ import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-PKG = HERE.parent  # tools/qt2wasm
+PKG = HERE.parent  # qt2wasm/
 CHANNEL = "nandi-testing"
 NAME = "qt2wasm"
 UA = {"User-Agent": "qt2wasm-ci/1"}
@@ -42,7 +45,7 @@ def say(*a):
 def version() -> str:
     m = re.search(r'^\[package\][^\[]*?^version\s*=\s*"([^"]+)"', (PKG / "pixi.toml").read_text(), re.MULTILINE | re.DOTALL)
     if not m:
-        sys.exit("no [package] version in tools/qt2wasm/pixi.toml")
+        sys.exit("no [package] version in qt2wasm/pixi.toml")
     return m.group(1)
 
 
@@ -77,7 +80,7 @@ def main() -> None:
     ver = version()
     if published(ver):
         say(f"{NAME} {ver} is already on {CHANNEL}; nothing to do. Bump the version in "
-            "tools/qt2wasm/pixi.toml and pyproject.toml to publish again.")
+            "qt2wasm/pixi.toml and pyproject.toml to publish again.")
         return
 
     dist = PKG / "dist"

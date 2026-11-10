@@ -1,0 +1,32 @@
+# wasmtime 36.0.0, the upstream release CLI repackaged into $PREFIX/bin
+# (conda-forge only has wasmtime-py, not the CLI). Same version as the
+# wasi-preview1-adapter. Published to prefix.dev/nandi-testing by ci/publish.py.
+context:
+  version: "36.0.0"
+
+package:
+  name: wasmtime
+  version: ${{ version }}
+
+source:
+  url: https://github.com/bytecodealliance/wasmtime/releases/download/v${{ version }}/wasmtime-v${{ version }}-x86_64-linux.tar.xz
+  sha256: 3336072bad1ba9488c0380580e8df81cc56cb346b2c9496cf726fd959861b5d5
+
+build:
+  number: 0
+  skip: not (linux and x86_64)
+  prefix_detection:
+    ignore: true
+  dynamic_linking:
+    binary_relocation: false
+  script:
+    - install -Dm755 wasmtime $PREFIX/bin/wasmtime
+
+tests:
+  - script:
+      - wasmtime --version
+
+about:
+  homepage: https://github.com/bytecodealliance/wasmtime
+  license: Apache-2.0 WITH LLVM-exception
+  summary: Standalone WebAssembly runtime (the wasmtime CLI)
