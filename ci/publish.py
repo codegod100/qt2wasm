@@ -161,6 +161,20 @@ def main() -> None:
         subprocess.run([exe, "upload", "prefix", "--channel", CHANNEL, "--skip-existing", *map(str, files)],
                        env=env, check=True)
         say(f"Published {recipe}: https://prefix.dev/channels/{CHANNEL}/packages/{meta(recipe)[0]}")
+        wait_indexed(recipe)
+
+
+def wait_indexed(recipe: str, timeout: int = 600) -> None:
+    """Block until the package just uploaded is in the channel's repodata, so a
+    later recipe that depends on it (perry-component-host on perry) can solve
+    it in its build/test env instead of racing prefix.dev's index."""
+    name, version, number, subdir = meta(recipe)
+    t0 = time.time()
+    while not published(name, version, number, subdir):
+        if time.time() - t0 > timeout:
+            sys.exit(f"{name} {version} (build {number}) still not in {CHANNEL}/{subdir} repodata after {timeout}s")
+        time.sleep(10)
+    say(f"{name} {version} (build {number}) is in the {CHANNEL} index ({int(time.time() - t0)}s)")
 
 
 if __name__ == "__main__":
