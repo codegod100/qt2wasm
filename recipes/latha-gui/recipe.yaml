@@ -1,0 +1,56 @@
+# latha-gui as a conda package (rattler-build): the native Qt latha:gui runtime,
+# prebuilt so nobody compiles wasmtime. Built and published to
+# prefix.dev/nandi-testing by .forge/jobs.toml (job publish-toolchain,
+# ci/publish.py). Bump `version` or the build number to
+# publish again.
+#
+#   rattler-build build -r recipes/latha-gui -c conda-forge -c https://prefix.dev/nandi-testing
+context:
+  version: "0.1.0"
+
+package:
+  name: latha-gui
+  version: ${{ version }}
+
+source:
+  path: ../..
+  use_gitignore: true
+  filter:
+    include:
+      - latha-gui/**
+      - qt2wasm/gui/wit/**
+
+build:
+  number: 0
+  skip: not (linux and x86_64)
+  script:
+    - export CMAKE_PREFIX_PATH=$PREFIX
+    - export CARGO_HOME=$SRC_DIR/.cargo-home
+    - bash latha-gui/build.sh
+    - install -Dm755 latha-gui/build/latha-gui $PREFIX/bin/latha-gui
+    - install -Dm644 qt2wasm/gui/wit/gui.wit $PREFIX/share/latha-gui/gui.wit
+    - install -Dm644 latha-gui/README.md $PREFIX/share/latha-gui/README.md
+
+requirements:
+  build:
+    - ${{ compiler('c') }}
+    - ${{ compiler('cxx') }}
+    - ${{ stdlib('c') }}
+    - rust >=1.88
+    - cmake >=3.24
+    - ninja
+    - pkg-config
+  host:
+    - qt6-main >=6.8
+  run:
+    - qt6-main >=6.8
+
+tests:
+  - script:
+      - latha-gui --help
+      - test -f $PREFIX/share/latha-gui/gui.wit
+
+about:
+  homepage: https://fileapi.fastapicloud.dev/forge/#nandi.uk/qt2wasm
+  license: LGPL-2.1-only OR LGPL-3.0-only
+  summary: Run any latha:gui WebAssembly app (a qt2wasm --gui build) in a native Qt window, on wasmtime
