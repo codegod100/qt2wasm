@@ -19,6 +19,9 @@
 # instead of 12 s per compile. Build 2 adds `fuel: 0` = no fuel metering
 # (guest code runs without per-instruction counting; epoch interruption still
 # stops it), which takes ~40% off kwi-terminal's per-keystroke repaint.
+# Build 3 (embedded-code.patch) loads machine code linked into the program
+# instead of compiling: kwi-wasm's perry-gui AOT build links an app's .cwasm
+# (and the app) into one binary that starts in ~30 ms with no cache.
 # Published to prefix.dev/nandi-testing by ci/publish.py.
 context:
   version: "0.5.1665"
@@ -30,7 +33,7 @@ package:
   version: ${{ version }}
 
 build:
-  number: 2
+  number: 3
   skip: not (linux and x86_64)
   prefix_detection:
     ignore: true

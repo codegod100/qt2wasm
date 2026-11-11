@@ -1,0 +1,171 @@
+diff --git a/crates/perry-component-host/src/code_cache.rs b/crates/perry-component-host/src/code_cache.rs
+index e85fab6d4..d2444705e 100644
+--- a/crates/perry-component-host/src/code_cache.rs
++++ b/crates/perry-component-host/src/code_cache.rs
+@@ -55,12 +55,122 @@ fn key(engine: &Engine, bytes: &[u8]) -> String {
+         .collect()
+ }
+ 
+-/// `Component::from_binary`, served from the cache when an entry exists.
++/// One ahead-of-time compiled component linked into the binary: `key` is the
++/// 64 hex digits of [`key`] for the bytes it was compiled from, `code` what
++/// `Component::serialize` wrote for them (a `.cwasm`). `name` (a C string)
++/// and `wasm` are optional: the component's own bytes, which a program loads
++/// by passing [`EMBEDDED_PREFIX`] + name instead of the bytes.
++#[repr(C)]
++pub struct EmbeddedComponent {
++    pub key: *const u8,
++    pub code: *const u8,
++    pub len: usize,
++    pub name: *const std::ffi::c_char,
++    pub wasm: *const u8,
++    pub wasm_len: usize,
++}
++
++/// Bytes that start with this name a component linked into the program.
++pub const EMBEDDED_PREFIX: &[u8] = b"\0perry-embedded\0";
++
++// A table of compiled components that the program may link in (null-key
++// terminated), e.g. from a Perry native library made by `perry-gui`'s AOT
++// build. Weak: a program without one links fine and the symbol is null.
++unsafe extern "C" {
++    #[linkage = "extern_weak"]
++    static perry_component_embedded: *const EmbeddedComponent;
++}
++
++fn table() -> *const EmbeddedComponent {
++    // SAFETY: reading the address of a weak symbol (null when absent).
++    unsafe { perry_component_embedded }
++}
++
++/// The bytes to load: `bytes` itself, or the linked-in component it names.
++pub(crate) fn resolve(bytes: &[u8]) -> Result<&[u8]> {
++    let Some(name) = bytes.strip_prefix(EMBEDDED_PREFIX) else {
++        return Ok(bytes);
++    };
++    let mut entry = table();
++    // SAFETY: the table, when present, is a static C array ending in a null key.
++    unsafe {
++        while !entry.is_null() && !(*entry).key.is_null() {
++            let e = &*entry;
++            if !e.name.is_null() && !e.wasm.is_null() && std::ffi::CStr::from_ptr(e.name).to_bytes() == name {
++                return Ok(std::slice::from_raw_parts(e.wasm, e.wasm_len));
++            }
++            entry = entry.add(1);
++        }
++    }
++    anyhow::bail!(
++        "no component named {:?} is linked into this program",
++        String::from_utf8_lossy(name)
++    )
++}
++
++fn embedded(key: &str) -> Option<&'static [u8]> {
++    // SAFETY: the table, when present, is a static C array ending in a null key.
++    unsafe {
++        let mut entry = table();
++        if entry.is_null() {
++            return None;
++        }
++        while !(*entry).key.is_null() {
++            let k = std::slice::from_raw_parts((*entry).key, 64);
++            if k == key.as_bytes() {
++                return Some(std::slice::from_raw_parts((*entry).code, (*entry).len));
++            }
++            entry = entry.add(1);
++        }
++    }
++    None
++}
++
++fn debug() -> bool {
++    std::env::var_os("PERRY_COMPONENT_DEBUG").is_some_and(|v| !v.is_empty() && v != "0")
++}
++
++/// `Component::from_binary`, served from code linked into the program (see
++/// [`EmbeddedComponent`]) or from the on-disk cache when an entry exists.
++/// `PERRY_COMPONENT_KEY_FILE=PATH` writes the key of the component compiled
++/// here to PATH (how an AOT build finds its cache entry).
+ pub(crate) fn compile(engine: &Engine, bytes: &[u8]) -> Result<Component> {
++    let t0 = std::time::Instant::now();
++    let k = key(engine, bytes);
++    if let Some(path) = std::env::var_os("PERRY_COMPONENT_KEY_FILE").filter(|v| !v.is_empty()) {
++        let _ = std::fs::write(path, &k);
++    }
++    if let Some(code) = embedded(&k) {
++        // SAFETY: the code was serialized by this host's engine configuration
++        // for exactly these bytes (the key covers the wasmtime build, Config
++        // and the bytes) and linked into this program at build time; wasmtime
++        // checks the header's version and flags again.
++        match unsafe { Component::deserialize(engine, code) } {
++            Ok(component) => {
++                if debug() {
++                    eprintln!("perry-component-host: embedded code {} ({} bytes) in {:?}", &k[..16], code.len(), t0.elapsed());
++                }
++                return Ok(component);
++            }
++            Err(e) => {
++                if debug() {
++                    eprintln!("perry-component-host: embedded code {} rejected: {e:#}", &k[..16]);
++                }
++            }
++        }
++    }
++    let component = compile_cached(engine, bytes, &k)?;
++    if debug() {
++        eprintln!("perry-component-host: component {} ready in {:?}", &k[..16], t0.elapsed());
++    }
++    Ok(component)
++}
++
++fn compile_cached(engine: &Engine, bytes: &[u8], key: &str) -> Result<Component> {
+     let Some(dir) = dir() else {
+         return Ok(Component::from_binary(engine, bytes)?);
+     };
+-    let path = dir.join(format!("{}.cwasm", key(engine, bytes)));
++    let path = dir.join(format!("{key}.cwasm"));
+     if path.is_file() {
+         // SAFETY: entries are written only by `serialize` below from this
+         // engine configuration (the key covers it) into the user's own cache
+@@ -91,3 +201,22 @@ fn store(dir: &std::path::Path, path: &std::path::Path, code: &[u8]) -> std::io:
+         let _ = std::fs::remove_file(&tmp);
+     })
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn plain_bytes_resolve_to_themselves() {
++        let bytes = b"\0asm\x0d\0\x01\0";
++        assert_eq!(resolve(bytes).unwrap(), bytes);
++    }
++
++    #[test]
++    fn unknown_embedded_name_is_an_error() {
++        let mut bytes = EMBEDDED_PREFIX.to_vec();
++        bytes.extend_from_slice(b"nope");
++        let err = resolve(&bytes).unwrap_err().to_string();
++        assert!(err.contains("nope"), "{err}");
++    }
++}
+diff --git a/crates/perry-component-host/src/lib.rs b/crates/perry-component-host/src/lib.rs
+index e8b3e26b3..7aa7bc8f1 100644
+--- a/crates/perry-component-host/src/lib.rs
++++ b/crates/perry-component-host/src/lib.rs
+@@ -1,5 +1,6 @@
+ //! Optional native Component Model engine. A host owns its Store, resource
+ //! handles and limits. No Perry heap pointer crosses this crate boundary.
++#![feature(linkage)]
+ mod async_values;
+ mod asynchronous;
+ mod driver;
+@@ -210,6 +211,7 @@ impl Host {
+         dispatcher: Option<Arc<asynchronous::dispatch::Dispatcher>>,
+         disposal: bool,
+     ) -> Result<Self> {
++        let bytes = code_cache::resolve(bytes)?;
+         ensure!(
+             options.memory_bytes > 0 && options.instances > 0,
+             "component limits must be positive"

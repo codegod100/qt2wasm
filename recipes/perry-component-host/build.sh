@@ -12,6 +12,12 @@ git -C "$src" checkout -q FETCH_HEAD
 # two when the task-exit rewrite applies. Also: Options.fuel == 0 turns fuel
 # metering off (consume_fuel(false); refills become no-ops).
 git -C "$src" apply "$RECIPE_DIR/load-speed.patch"
+# AOT (build 3): before compiling, look up code linked into the program (a
+# weak `perry_component_embedded` table of .cwasm blobs keyed like the cache),
+# and let bytes "\0perry-embedded\0NAME" load a component linked in the same
+# way. kwi-wasm's `perry/gui/build.sh aot` makes such programs: one binary,
+# no JIT at start-up. PERRY_COMPONENT_KEY_FILE / PERRY_COMPONENT_DEBUG help it.
+git -C "$src" apply "$RECIPE_DIR/embedded-code.patch"
 
 export RUSTUP_HOME=$SRC_DIR/.rustup CARGO_HOME=${CARGO_HOME_CACHE:-$SRC_DIR/.cargo}
 curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal --default-toolchain "$PERRY_RUST"
