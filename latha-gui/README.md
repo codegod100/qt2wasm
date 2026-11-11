@@ -11,6 +11,12 @@ latha-gui path/to/app.wasm [args...]
 pixi global install -c conda-forge -c https://prefix.dev/nandi-testing latha-gui   # the prebuilt
 ```
 
+`just install latha-gui` (from the qt2wasm checkout) installs the prebuilt,
+links it into /usr/bin, and installs [`latha-gui.desktop`](latha-gui.desktop)
+(plus an `application/wasm` MIME definition for older shared-mime-info), so
+`.wasm` files open with latha-gui from the file manager's Open With; it becomes
+the default for `.wasm` unless you already chose one.
+
 It ships as the conda package `latha-gui` on prefix.dev/nandi-testing
 ([`../recipes/latha-gui`](../recipes/latha-gui/recipe.yaml), built and
 published by the `publish-toolchain` forge job like the other recipes; bump

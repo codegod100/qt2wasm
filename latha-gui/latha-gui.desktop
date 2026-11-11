@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=latha-gui
+GenericName=WebAssembly App Runner
+Comment=Run a latha:gui WebAssembly app in a window
+Exec=latha-gui %f
+Icon=application-x-executable
+Terminal=false
+MimeType=application/wasm;
+Categories=Development;
+StartupWMClass=latha-gui

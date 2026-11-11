@@ -83,7 +83,7 @@ build-all:
 
 # --- installing onto your system ---------------------------------------------
 
-# Install a prebuilt nandi-testing package (pixi global) and link its programs into /usr/bin (sudo), e.g. `just install latha-gui`; rerun to update
+# Install a prebuilt nandi-testing package (pixi global) and link its programs into /usr/bin (sudo) plus its desktop entry if the checkout has one, e.g. `just install latha-gui`; rerun to update
 install pkg:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -103,6 +103,30 @@ install pkg:
         sudo ln -sfn "$bin/$exe" "/usr/bin/$exe"
         echo "/usr/bin/$exe -> $bin/$exe"
     done
+    # A desktop entry in the checkout (e.g. latha-gui/latha-gui.desktop) makes the
+    # program a file handler: it shows up in Open With, and becomes the default for
+    # its MIME types unless you already picked one.
+    desktop="{{root}}/{{pkg}}/{{pkg}}.desktop"
+    [ -e "$desktop" ] || exit 0
+    sudo install -Dm644 "$desktop" "/usr/share/applications/{{pkg}}.desktop"
+    echo "installed /usr/share/applications/{{pkg}}.desktop"
+    mime="{{root}}/{{pkg}}/{{pkg}}-mime.xml"
+    if [ -e "$mime" ]; then
+        sudo install -Dm644 "$mime" "/usr/share/mime/packages/{{pkg}}.xml"
+        command -v update-mime-database >/dev/null && sudo update-mime-database /usr/share/mime
+    fi
+    command -v update-desktop-database >/dev/null && sudo update-desktop-database -q /usr/share/applications
+    command -v xdg-mime >/dev/null && for t in $(sed -n 's/^MimeType=//p' "$desktop" | tr ';' ' '); do
+        cur=$(xdg-mime query default "$t" 2>/dev/null || true)
+        if [ -z "$cur" ]; then
+            xdg-mime default "{{pkg}}.desktop" "$t" && echo "default for $t: {{pkg}}.desktop"
+        fi
+    done
+    # Plasma reads its own service cache; rebuild it so Open With sees the entry now.
+    for k in kbuildsycoca6 kbuildsycoca5; do
+        command -v "$k" >/dev/null && { "$k" >/dev/null 2>&1 || true; break; }
+    done
+    true
 
 # --- publishing (prefix.dev/nandi-testing) -----------------------------------
 # CI publishes on every push to main; these run the same scripts locally and
