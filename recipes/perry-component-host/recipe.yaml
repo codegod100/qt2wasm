@@ -14,6 +14,9 @@
 # Installs $PREFIX/lib/perry/component/libperry_component_host.a and an
 # activation script that points Perry's library search at it (PERRY_LIB_DIR),
 # so `perry compile` finds it in an activated env (pixi run / conda activate).
+# load-speed.patch (build 1) adds parallel compilation and a compiled-code
+# cache: kwi-terminal.wasm loads in ~3 s the first time, ~6 ms after that,
+# instead of 12 s per compile.
 # Published to prefix.dev/nandi-testing by ci/publish.py.
 context:
   version: "0.5.1665"
@@ -25,7 +28,7 @@ package:
   version: ${{ version }}
 
 build:
-  number: 0
+  number: 1
   skip: not (linux and x86_64)
   prefix_detection:
     ignore: true

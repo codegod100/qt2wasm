@@ -1,0 +1,213 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 785a5d4b..19fa48e2 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -5189,6 +5189,7 @@ dependencies = [
+  "perry-wit",
+  "serde",
+  "serde_json",
++ "sha2 0.10.9",
+  "socket2",
+  "system-interface",
+  "turnloop-tls",
+@@ -9020,6 +9021,7 @@ dependencies = [
+  "once_cell",
+  "postcard",
+  "pulley-interpreter",
++ "rayon",
+  "rustix 1.1.5",
+  "semver",
+  "serde",
+diff --git a/crates/perry-component-host/Cargo.toml b/crates/perry-component-host/Cargo.toml
+index afc8c228..d6fdd479 100644
+--- a/crates/perry-component-host/Cargo.toml
++++ b/crates/perry-component-host/Cargo.toml
+@@ -24,7 +24,7 @@ url.workspace = true
+ socket2 = { workspace = true, features = ["all"] }
+ perry-wit = { path = "../perry-wit" }
+ perry-abi.workspace = true
+-wasmtime = { version = "48.0.8", default-features = false, features = ["anyhow", "std", "runtime", "cranelift", "component-model", "gc-drc"] }
++wasmtime = { version = "48.0.8", default-features = false, features = ["anyhow", "std", "runtime", "cranelift", "component-model", "gc-drc", "parallel-compilation"] }
+ 
+ 
+ # Reuse the OS randomness provider already selected by the workspace.
+@@ -40,6 +40,7 @@ perry-wasi = { path = "../perry-wasi", features = ["p3"] }
+ 
+ wac-graph = { version = "=0.12.0", path = "../../third_party/wac-graph" }
+ wat = "1.254"
++sha2 = "0.10"
+ 
+ wasm-encoder = { version = "=0.258.3", features = ["wasmparser"] }
+ wasmparser = "=0.258.3"
+diff --git a/crates/perry-component-host/src/async_values/compose.rs b/crates/perry-component-host/src/async_values/compose.rs
+index a2ff9525..cee6e112 100644
+--- a/crates/perry-component-host/src/async_values/compose.rs
++++ b/crates/perry-component-host/src/async_values/compose.rs
+@@ -213,9 +213,7 @@ impl Prepared {
+         };
+         let bytes = graph.encode(EncodeOptions::default())?;
+         Ok(Self {
+-            component: Component::from_binary(engine, &bytes)
+-                .map_err(anyhow::Error::from)
+-                .context("compiling generic async composition")?,
++            component: crate::code_cache::compile(engine, &bytes).context("compiling generic async composition")?,
+             control: Some(control),
+             readers,
+             schemas,
+diff --git a/crates/perry-component-host/src/code_cache.rs b/crates/perry-component-host/src/code_cache.rs
+new file mode 100644
+index 00000000..e85fab6d
+--- /dev/null
++++ b/crates/perry-component-host/src/code_cache.rs
+@@ -0,0 +1,93 @@
++//! On-disk cache of compiled components, keyed on the SHA-256 of the
++//! component bytes and the engine's precompile compatibility hash, so a
++//! changed component, Config or wasmtime build never reuses stale code.
++//!
++//! Location: `$PERRY_COMPONENT_CACHE_DIR`, else
++//! `$XDG_CACHE_HOME/perry-component-host`, else `~/.cache/perry-component-host`.
++//! `PERRY_COMPONENT_CACHE=0` disables it. Any cache failure falls back to a
++//! plain compile; a corrupt or incompatible entry is recompiled and replaced.
++use anyhow::Result;
++use sha2::{Digest, Sha256};
++use std::hash::{Hash, Hasher};
++use std::path::PathBuf;
++use wasmtime::component::Component;
++use wasmtime::Engine;
++
++struct ShaHasher(Sha256);
++impl Hasher for ShaHasher {
++    fn finish(&self) -> u64 {
++        0
++    }
++    fn write(&mut self, bytes: &[u8]) {
++        self.0.update(bytes);
++    }
++}
++
++fn dir() -> Option<PathBuf> {
++    if std::env::var_os("PERRY_COMPONENT_CACHE").is_some_and(|v| v == "0") {
++        return None;
++    }
++    if let Some(dir) = std::env::var_os("PERRY_COMPONENT_CACHE_DIR").filter(|v| !v.is_empty()) {
++        return Some(PathBuf::from(dir));
++    }
++    let base = std::env::var_os("XDG_CACHE_HOME")
++        .filter(|v| !v.is_empty())
++        .map(PathBuf::from)
++        .or_else(|| {
++            std::env::var_os("HOME")
++                .filter(|v| !v.is_empty())
++                .map(|h| PathBuf::from(h).join(".cache"))
++        })?;
++    Some(base.join("perry-component-host"))
++}
++
++fn key(engine: &Engine, bytes: &[u8]) -> String {
++    let mut hasher = ShaHasher(Sha256::new());
++    hasher.write(env!("CARGO_PKG_VERSION").as_bytes());
++    engine.precompile_compatibility_hash().hash(&mut hasher);
++    hasher.write(&(bytes.len() as u64).to_le_bytes());
++    hasher.write(bytes);
++    hasher
++        .0
++        .finalize()
++        .iter()
++        .map(|b| format!("{b:02x}"))
++        .collect()
++}
++
++/// `Component::from_binary`, served from the cache when an entry exists.
++pub(crate) fn compile(engine: &Engine, bytes: &[u8]) -> Result<Component> {
++    let Some(dir) = dir() else {
++        return Ok(Component::from_binary(engine, bytes)?);
++    };
++    let path = dir.join(format!("{}.cwasm", key(engine, bytes)));
++    if path.is_file() {
++        // SAFETY: entries are written only by `serialize` below from this
++        // engine configuration (the key covers it) into the user's own cache
++        // directory; wasmtime also checks the header's version and flags.
++        match unsafe { Component::deserialize_file(engine, &path) } {
++            Ok(component) => return Ok(component),
++            Err(_) => {
++                let _ = std::fs::remove_file(&path);
++            }
++        }
++    }
++    let component = Component::from_binary(engine, bytes)?;
++    if let Ok(code) = component.serialize() {
++        let _ = store(&dir, &path, &code);
++    }
++    Ok(component)
++}
++
++fn store(dir: &std::path::Path, path: &std::path::Path, code: &[u8]) -> std::io::Result<()> {
++    std::fs::create_dir_all(dir)?;
++    let tmp = dir.join(format!(
++        ".{}.{}.tmp",
++        path.file_name().unwrap().to_string_lossy(),
++        std::process::id()
++    ));
++    std::fs::write(&tmp, code)?;
++    std::fs::rename(&tmp, path).inspect_err(|_| {
++        let _ = std::fs::remove_file(&tmp);
++    })
++}
+diff --git a/crates/perry-component-host/src/command.rs b/crates/perry-component-host/src/command.rs
+index 912a7d3c..210d6df4 100644
+--- a/crates/perry-component-host/src/command.rs
++++ b/crates/perry-component-host/src/command.rs
+@@ -111,9 +111,7 @@ impl Prepared {
+             .wasm_exceptions(true)
+             .consume_fuel(true);
+         let engine = Engine::new(&config)?;
+-        let component = Component::from_binary(&engine, bytes)
+-            .map_err(anyhow::Error::from)
+-            .context("compiling WASI command")?;
++        let component = crate::code_cache::compile(&engine, bytes).context("compiling WASI command")?;
+         // CommandPre checks names, but generated function type checks happen only
+         // after instantiation. Validate the signature before an initializer exits.
+         let profile = validate_command(&engine, &component)
+diff --git a/crates/perry-component-host/src/lib.rs b/crates/perry-component-host/src/lib.rs
+index e396e382..4555a96c 100644
+--- a/crates/perry-component-host/src/lib.rs
++++ b/crates/perry-component-host/src/lib.rs
+@@ -10,6 +10,7 @@ mod imports;
+ pub use asynchronous::{AsyncImport, AsyncImports};
+ mod borrowed;
+ mod cleanup;
++mod code_cache;
+ mod command;
+ pub mod http;
+ pub use command::{run_command, run_command_async};
+@@ -34,7 +35,7 @@ use serde::{Deserialize, Serialize};
+ use serde_json::Value;
+ use std::collections::BTreeMap;
+ use std::sync::Arc;
+-use wasmtime::component::{Component, Func, Linker, Val};
++use wasmtime::component::{Func, Linker, Val};
+ use wasmtime::{AsContextMut, Config, Engine, Store};
+ 
+ pub type Import = Arc<dyn Fn(&[Value]) -> Result<Option<Value>> + Send + Sync>;
+@@ -214,17 +215,12 @@ impl Host {
+         config.wasm_component_model_threading(false);
+         config.wasm_component_model_async_stackful(false);
+         let engine = Engine::new(&config)?;
+-        let component = Component::from_binary(&engine, bytes)
+-            .map_err(anyhow::Error::from)
+-            .context("compiling component")?;
+-        contract::validate(&engine, &component, world, options.wasi.is_some())?;
++        // Instrument before compiling so the component is compiled once: the
++        // rewrite only adds an exit hook import, and validation below runs on
++        // the component that is actually instantiated.
+         let exits = task_exit::Prepared::new(bytes, world, disposal)?;
+         let bytes = exits.bytes.as_slice();
+-        let component = if exits.targets.is_empty() {
+-            component
+-        } else {
+-            Component::from_binary(&engine, bytes).map_err(anyhow::Error::from)?
+-        };
++        let component = code_cache::compile(&engine, bytes).context("compiling component")?;
+         let identities = contract::validate(&engine, &component, world, options.wasi.is_some())?;
+         let prepared = async_values::Prepared::new(
+             &engine,
