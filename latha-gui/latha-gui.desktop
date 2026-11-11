@@ -8,4 +8,7 @@ Icon=latha-gui
 Terminal=false
 MimeType=application/wasm;
 Categories=Development;
-StartupWMClass=latha-gui
+# No StartupWMClass: KWin reports every latha-gui window's resource name as
+# latha-gui (the program), and Plasma's task manager matches StartupWMClass
+# against it before the app id, so each app (kwi, ...) would get this entry
+# and icon instead of its own <app id>.desktop.
