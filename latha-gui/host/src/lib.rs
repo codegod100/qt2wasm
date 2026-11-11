@@ -25,6 +25,9 @@ use wasmtime_wasi::{FsPerms, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 wasmtime::component::bindgen!({
     path: "../../qt2wasm/gui/wit",
     world: "latha:gui/gui-pty",
+    // Export calls run on a fiber with a big stack (see block_on); imports
+    // stay plain calls on the GUI thread.
+    exports: { default: async },
 });
 
 use exports::latha::gui::app as wapp;
@@ -279,6 +282,28 @@ impl latha::gui::pty::Host for Host {
     }
 }
 
+/// Drive an export call's future to its end on this thread. wasmtime runs the
+/// wasm on a fiber; our imports are synchronous, so it never waits on
+/// anything but finishing.
+fn block_on<F: std::future::Future>(f: F) -> F::Output {
+    use std::task::{Context, Poll, Wake, Waker};
+    struct Unpark(std::thread::Thread);
+    impl Wake for Unpark {
+        fn wake(self: std::sync::Arc<Self>) {
+            self.0.unpark()
+        }
+    }
+    let waker = Waker::from(std::sync::Arc::new(Unpark(std::thread::current())));
+    let mut cx = Context::from_waker(&waker);
+    let mut f = std::pin::pin!(f);
+    loop {
+        if let Poll::Ready(r) = f.as_mut().poll(&mut cx) {
+            return r;
+        }
+        std::thread::park();
+    }
+}
+
 // --- the app ---------------------------------------------------------------------------
 
 pub struct LathaApp {
@@ -425,6 +450,17 @@ fn load(path: &Path, opts: Option<&LathaOptions>, cb: LathaCallbacks, args: &[St
     }
     let mut config = procs::base_config();
     config.wasm_component_model(true);
+    // LibWeb and LibJS recurse deeply: the app's calls get the processes'
+    // wasm stack (LATHA_GUI_WASM_STACK_MB to change it). It is the stack of
+    // the fiber each export call runs on (async_stack_size, mapped lazily),
+    // so the GUI thread's own 8 MiB does not limit it and imports still run
+    // on the GUI thread.
+    let stack = std::env::var("LATHA_GUI_WASM_STACK_MB")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .map_or(procs::WASM_STACK, |mb| mb.max(1) << 20);
+    config.async_stack_size(stack + (1 << 20));
+    config.max_wasm_stack(stack);
     let engine = Engine::new(&config)?;
     let ro = run_options(opts);
     let component = load_component(&engine, &bytes, ro.cache)?;
@@ -460,7 +496,7 @@ fn load(path: &Path, opts: Option<&LathaOptions>, cb: LathaCallbacks, args: &[St
     let proc = procs::ProcState::for_app(rt, path.to_path_buf(), wake);
     let host = Host { cb, wasi: wasi.build(), table: ResourceTable::new(), proc };
     let mut store = Store::new(&engine, host);
-    let bindings = GuiPty::instantiate(&mut store, &component, &linker)?;
+    let bindings = block_on(GuiPty::instantiate_async(&mut store, &component, &linker))?;
     Ok(LathaApp {
         store,
         bindings,
@@ -736,7 +772,7 @@ pub unsafe extern "C" fn latha_start(
 ) -> c_int {
     let a = &mut *app;
     let v: Vec<String> = (0..nargs).map(|i| str_of(&*args.add(i)).to_owned()).collect();
-    match a.call(|g, s| g.call_start(s, &v)) {
+    match a.call(|g, s| block_on(g.call_start(s, &v))) {
         Some(Ok(size)) => {
             *w = size.width;
             *h = size.height;
@@ -762,7 +798,7 @@ macro_rules! ok {
 
 #[no_mangle]
 pub unsafe extern "C" fn latha_resize(app: *mut LathaApp, w: u32, h: u32, scale: f64) -> c_int {
-    ok!((*app).call(|g, s| g.call_resize(s, w, h, scale)))
+    ok!((*app).call(|g, s| block_on(g.call_resize(s, w, h, scale))))
 }
 
 #[no_mangle]
@@ -784,13 +820,13 @@ pub unsafe extern "C" fn latha_key(
         modifiers: mods(modifiers),
         text: str_of(&text).to_owned(),
     };
-    ok!(a.call(|g, s| g.call_key(s, &ev)))
+    ok!(a.call(|g, s| block_on(g.call_key(s, &ev))))
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn latha_text(app: *mut LathaApp, text: LathaStr) -> c_int {
     let t = str_of(&text).to_owned();
-    ok!((*app).call(|g, s| g.call_text(s, &t)))
+    ok!((*app).call(|g, s| block_on(g.call_text(s, &t))))
 }
 
 #[no_mangle]
@@ -820,7 +856,7 @@ pub unsafe extern "C" fn latha_pointer(app: *mut LathaApp, p: *const LathaPointe
         y: p.y,
         clicks: p.clicks,
     };
-    ok!((*app).call(|g, s| g.call_pointer(s, ev)))
+    ok!((*app).call(|g, s| block_on(g.call_pointer(s, ev))))
 }
 
 #[no_mangle]
@@ -835,23 +871,23 @@ pub unsafe extern "C" fn latha_wheel(app: *mut LathaApp, w: *const LathaWheel) -
         pixels_y: w.pixels_y,
         modifiers: mods(w.modifiers),
     };
-    ok!((*app).call(|g, s| g.call_wheel(s, ev)))
+    ok!((*app).call(|g, s| block_on(g.call_wheel(s, ev))))
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn latha_focus(app: *mut LathaApp, focused: c_int) -> c_int {
-    ok!((*app).call(|g, s| g.call_focus(s, focused != 0)))
+    ok!((*app).call(|g, s| block_on(g.call_focus(s, focused != 0))))
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn latha_color_scheme(app: *mut LathaApp, dark: c_int) -> c_int {
-    ok!((*app).call(|g, s| g.call_color_scheme(s, dark != 0)))
+    ok!((*app).call(|g, s| block_on(g.call_color_scheme(s, dark != 0))))
 }
 
 /// 1: the host may close; 0: not now; -1: trap.
 #[no_mangle]
 pub unsafe extern "C" fn latha_close(app: *mut LathaApp) -> c_int {
-    match (*app).call(|g, s| g.call_close(s)) {
+    match (*app).call(|g, s| block_on(g.call_close(s))) {
         Some(true) => 1,
         Some(false) => 0,
         None => -1,
@@ -861,7 +897,7 @@ pub unsafe extern "C" fn latha_close(app: *mut LathaApp) -> c_int {
 /// The ms until the app wants the next tick, -1 for none, -2 on a trap.
 #[no_mangle]
 pub unsafe extern "C" fn latha_tick(app: *mut LathaApp) -> i64 {
-    match (*app).call(|g, s| g.call_tick(s)) {
+    match (*app).call(|g, s| block_on(g.call_tick(s))) {
         Some(Some(ms)) => ms as i64,
         Some(None) => -1,
         None => -2,
@@ -873,7 +909,7 @@ pub unsafe extern "C" fn latha_tick(app: *mut LathaApp) -> i64 {
 #[no_mangle]
 pub unsafe extern "C" fn latha_paint(app: *mut LathaApp) -> c_int {
     let a = &mut *app;
-    let Some(d) = a.call(|g, s| g.call_paint(s)) else {
+    let Some(d) = a.call(|g, s| block_on(g.call_paint(s))) else {
         return -1;
     };
     let r = |r: &wt::Rect| LathaRect { x: r.x, y: r.y, width: r.width, height: r.height };
@@ -901,7 +937,7 @@ pub unsafe extern "C" fn latha_damage(
 
 #[no_mangle]
 pub unsafe extern "C" fn latha_frame_size(app: *mut LathaApp, w: *mut u32, h: *mut u32) -> c_int {
-    match (*app).call(|g, s| g.call_frame_size(s)) {
+    match (*app).call(|g, s| block_on(g.call_frame_size(s))) {
         Some(sz) => {
             *w = sz.width;
             *h = sz.height;
@@ -917,7 +953,7 @@ pub unsafe extern "C" fn latha_frame_size(app: *mut LathaApp, w: *mut u32, h: *m
 pub unsafe extern "C" fn latha_frame_pixels(app: *mut LathaApp, r: LathaRect, dst: *mut u8, stride: usize) -> c_int {
     let a = &mut *app;
     let rect = wt::Rect { x: r.x, y: r.y, width: r.width, height: r.height };
-    let Some(s) = a.call(|g, st| g.call_frame_pixels(st, rect)) else {
+    let Some(s) = a.call(|g, st| block_on(g.call_frame_pixels(st, rect))) else {
         return -1;
     };
     let row = r.width as usize * 4;
