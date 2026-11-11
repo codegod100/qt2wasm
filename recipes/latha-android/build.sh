@@ -11,7 +11,9 @@ mkdir -p "$work"
 export CONDA_PREFIX=$BUILD_PREFIX
 font=$(ls "$BUILD_PREFIX"/fonts/DejaVuSans*.ttf | head -n 1)
 mkdir -p latha-android/assets
-qt2wasm build qt2wasm/examples/sketch --gui --font "$font" --js none -o latha-android/assets/app.wasm
+# (into its own dir: qt2wasm writes docs and the WIT beside the .wasm)
+qt2wasm build qt2wasm/examples/sketch --gui --font "$font" --js none -o "$work/app/sketch.wasm"
+cp "$work/app/sketch.wasm" latha-android/assets/app.wasm
 printf 'sketch\n' > latha-android/assets/app.args
 
 # 2. Rust with the Android targets, and cargo-apk. Conda's compiler flags are
