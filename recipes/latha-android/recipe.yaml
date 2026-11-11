@@ -1,0 +1,63 @@
+# latha-android: the Android latha:gui runner (latha-android/) as an APK,
+# with qt2wasm's sketch example (qt2wasm build --gui) bundled as its app.
+# The package is just the file: $PREFIX/share/latha-android/latha.apk
+# (arm64-v8a + x86_64, Android 11+). Get it without installing anything:
+#
+#   pixi exec -c https://prefix.dev/nandi-testing -s latha-android -- \
+#       sh -c 'cp $CONDA_PREFIX/share/latha-android/latha.apk .'
+#
+# build.sh fetches rustup, cargo-apk and the Android NDK / SDK parts itself
+# (none are on conda-forge in a usable form). Built and published by the
+# publish-latha-android forge job (ci/publish.py latha-android); bump
+# `version` or the build number to publish again.
+context:
+  version: "0.1.0"
+  rust: "1.97.0"
+  ndk: r29
+
+package:
+  name: latha-android
+  version: ${{ version }}
+
+source:
+  path: ../..
+  use_gitignore: true
+  filter:
+    include:
+      - latha-android/**
+      - latha-gui/host/**
+      - qt2wasm/gui/wit/**
+      - qt2wasm/examples/sketch/**
+
+build:
+  number: 0
+  noarch: generic
+  prefix_detection:
+    ignore: true
+  dynamic_linking:
+    binary_relocation: false
+  script:
+    env:
+      LATHA_RUST: ${{ rust }}
+      LATHA_NDK: ${{ ndk }}
+    file: build.sh
+
+requirements:
+  build:
+    - qt2wasm
+    - fonttools
+    - font-ttf-dejavu-sans-mono
+    - openjdk >=17
+    - curl
+    - unzip
+    - ca-certificates
+
+tests:
+  - script:
+      - test -s $PREFIX/share/latha-android/latha.apk
+      - test -s $PREFIX/share/latha-android/app.wasm
+
+about:
+  homepage: https://fileapi.fastapicloud.dev/forge/#nandi.uk/qt2wasm
+  license: LGPL-2.1-only OR LGPL-3.0-only
+  summary: Run a latha:gui WebAssembly app (a qt2wasm --gui build) on Android, on wasmtime

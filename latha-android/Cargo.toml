@@ -1,0 +1,51 @@
+[package]
+name = "latha-android"
+version = "0.1.0"
+edition = "2021"
+license = "LGPL-2.1-only OR LGPL-3.0-only"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+latha-host = { path = "../latha-gui/host" }
+android-activity = { version = "0.6", features = ["native-activity"] }
+ndk = "0.9"
+log = "0.4"
+android_logger = "0.14"
+
+[profile.release]
+opt-level = 3
+debug = false
+lto = "thin"
+codegen-units = 16
+strip = true
+
+# cargo-apk (ci/android.sh): one NativeActivity, no Java.
+[package.metadata.android]
+package = "uk.nandi.latha"
+apk_name = "latha"
+build_targets = ["aarch64-linux-android", "x86_64-linux-android"]
+assets = "assets"
+resources = "res"
+
+[package.metadata.android.sdk]
+# memfd_create (latha:proc shared memory) is in bionic from API 30
+min_sdk_version = 30
+target_sdk_version = 35
+
+[package.metadata.android.application]
+label = "latha"
+icon = "@mipmap/ic_launcher"
+theme = "@android:style/Theme.DeviceDefault.NoActionBar"
+extract_native_libs = true
+
+[package.metadata.android.application.activity]
+config_changes = "orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
+launch_mode = "singleTask"
+orientation = "unspecified"
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.INTERNET"

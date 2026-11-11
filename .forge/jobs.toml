@@ -54,3 +54,14 @@ branches = ["main"]
 after = "publish-qt2wasm"
 timeout = 1800
 run = "bash ci/perry_counter.sh"
+
+# latha-android: the Android latha:gui runner as an APK (with the sketch
+# example bundled), packaged as noarch latha-android on nandi-testing. After
+# publish-qt2wasm because the bundled app is built with the published
+# qt2wasm. See recipes/latha-android.
+[[job]]
+name = "publish-latha-android"
+branches = ["main"]
+after = "publish-qt2wasm"
+timeout = 3600
+run = "depot --version && python3 ci/publish.py latha-android"
