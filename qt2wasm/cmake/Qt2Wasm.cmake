@@ -108,4 +108,9 @@ function(qt2wasm_add_component target)
     target_link_libraries(${target} PRIVATE ${_gen_obj} ${_libs} m)
     # A reactor: no main(), the host calls exports. Keep only what exports reach.
     target_link_options(${target} PRIVATE -mexec-model=reactor -Wl,--gc-sections)
+    # clang runs wasm-opt after every optimised link when one is on PATH; that
+    # is a second whole-module wasm-opt pass (the slowest step of a rebuild).
+    # `qt2wasm build` runs wasm-opt itself (step 5, skipped when the core is
+    # unchanged, off with --no-wasm-opt / --dev), so not here.
+    target_link_options(${target} PRIVATE --no-wasm-opt)
 endfunction()

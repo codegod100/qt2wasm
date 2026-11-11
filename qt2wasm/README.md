@@ -226,6 +226,26 @@ link. In this repo `pixi run docs` uses it to regenerate all of that for both
 examples (cached on the example sources); without qdoc it keeps the checked-in WITs (the
 build's would have no Qt docs) and says so. A test fails when a `.md` is stale and `pixi run docs-serve` serves the counter site.
 
+### Rebuilds
+
+A second `qt2wasm build` into the same `--build-dir` only redoes what changed.
+Generated sources are written to `gen.new/` and only changed files are copied
+into `gen/`, so ninja recompiles just the sources you edited; font subsets
+are kept in `<build-dir>/fonts/`; CMake configures again only when its
+arguments or the set of generated files change; wasm-opt, the component wrap,
+the docs site, the `.qch` and the JS bindings record a digest of their inputs
+in `<build-dir>/stamps/` and are skipped while it matches. The link passes
+`--no-wasm-opt` to clang, which would otherwise run a second whole-module
+wasm-opt after every optimised link. The log ends with each step's time.
+
+`--dev` is for an edit-build-run loop: no wasm-opt (the slowest step left, ~20 s
+on a 10 MB core module; the component comes out larger but loads in about the
+same time under wasmtime), no docs site, `.qch` or JS bindings. `--clean`
+forgets the build dir's state and builds everything again.
+
+Measured on kwi's latha:gui app (4 cores): no-op rebuild 37 s -> 0.5 s, one
+source edited 37 s -> 27 s (7 s with `--dev`), cold build 53 s -> 45 s.
+
 qt2wasm tidies wit-bindgen's Markdown for Python-Markdown: wit-bindgen puts
 enum-case and field docs after a bare `<p>`, which would be read as a raw
 HTML block that swallows the rest of the page.

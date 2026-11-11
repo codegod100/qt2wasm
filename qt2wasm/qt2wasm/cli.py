@@ -184,6 +184,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     b.add_argument("--no-wasm-opt", action="store_true")
     b.add_argument(
+        "--dev",
+        action="store_true",
+        help="quick edit-build-run loop: no wasm-opt (the component is larger "
+        "and loads a little slower), no docs site, Qt Help file or JS bindings",
+    )
+    b.add_argument(
+        "--clean",
+        action="store_true",
+        help="forget the build dir's generated sources, CMake build and step "
+        "stamps and build everything again",
+    )
+    b.add_argument(
         "--qpa", default="offscreen", help="static QPA plugin (offscreen or minimal)"
     )
     b.add_argument("--wasi-sdk")

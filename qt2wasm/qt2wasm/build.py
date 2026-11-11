@@ -1,6 +1,7 @@
 """`qt2wasm build`: Qt CMake project in, WASI component out.
 
-Steps (each logged with its time):
+Steps (their times are logged at the end; unchanged steps are skipped, see
+Stamps below):
   1. find tools          wasi-sdk, Qt-for-WASI prefix + toolchain, host moc,
                          wit-bindgen, wasm-tools, wasm-opt, p1 reactor adapter
   2. moc                 every header with Q_OBJECT/Q_GADGET: C++ for the
@@ -26,6 +27,8 @@ Steps (each logged with its time):
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -72,6 +75,130 @@ def run(cmd: list, **kw) -> subprocess.CompletedProcess:
             f"command failed ({r.returncode}): {' '.join(cmd)}\n{r.stdout[-4000:]}{r.stderr[-4000:]}"
         )
     return r
+
+
+# Incremental builds. A rebuild with nothing changed should take seconds:
+#  - generated sources are made in gen.new/ and only files whose bytes differ
+#    are copied into gen/, so their mtimes (and ninja's view) stay put;
+#  - font subsets, the CMake configure, wasm-opt, the component wrap, the docs
+#    site, the .qch and the JS bindings each record a digest of their inputs
+#    in <build-dir>/stamps/ and are skipped while it and their outputs match.
+STAMP_VERSION = "1"
+
+
+def digest(*parts) -> str:
+    """sha256 over strings, bytes and (the contents of) files."""
+    h = hashlib.sha256(STAMP_VERSION.encode())
+    for p in parts:
+        if isinstance(p, Path):
+            h.update(b"F" + str(p).encode() + b"\0")
+            if p.is_file():
+                with open(p, "rb") as f:
+                    for chunk in iter(lambda: f.read(1 << 20), b""):
+                        h.update(chunk)
+            else:
+                h.update(b"<missing>")
+        elif isinstance(p, bytes):
+            h.update(b"B" + p)
+        else:
+            h.update(b"S" + str(p).encode() + b"\0")
+    return h.hexdigest()
+
+
+def file_digest(p: Path) -> str:
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+class Stamps:
+    """<build-dir>/stamps/<step>.json: {"in": inputs digest, "out": {path:
+    sha256 or "dir"}}. fresh() is true when the inputs digest matches and every
+    output is still there unchanged (a directory only has to exist)."""
+
+    def __init__(self, bdir: Path, enabled: bool = True):
+        self.dir = bdir / "stamps"
+        self.enabled = enabled
+
+    def _path(self, step: str) -> Path:
+        return self.dir / f"{step}.json"
+
+    def fresh(self, step: str, key: str) -> bool:
+        if not self.enabled:
+            return False
+        try:
+            st = json.loads(self._path(step).read_text())
+        except (OSError, ValueError):
+            return False
+        if st.get("in") != key:
+            return False
+        for path, want in st.get("out", {}).items():
+            p = Path(path)
+            if want == "dir":
+                if not p.is_dir():
+                    return False
+            elif not p.is_file() or file_digest(p) != want:
+                return False
+        return True
+
+    def record(self, step: str, key: str, outputs: list) -> None:
+        self.dir.mkdir(parents=True, exist_ok=True)
+        out = {}
+        for o in outputs:
+            if o is None:
+                continue
+            o = Path(o)
+            out[str(o)] = "dir" if o.is_dir() else file_digest(o)
+        self._path(step).write_text(json.dumps({"in": key, "out": out}, indent=1))
+
+    def drop(self, step: str) -> None:
+        self._path(step).unlink(missing_ok=True)
+
+
+def sync_tree(src: Path, dst: Path) -> int:
+    """Make dst a copy of src, rewriting only files whose bytes differ (so an
+    unchanged generated file keeps its mtime). Returns how many changed."""
+    changed = 0
+    want = set()
+    for f in sorted(src.rglob("*")):
+        if f.is_dir():
+            continue
+        rel = f.relative_to(src)
+        want.add(rel)
+        d = dst / rel
+        if d.is_file() and d.stat().st_size == f.stat().st_size and d.read_bytes() == f.read_bytes():
+            continue
+        d.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(f, d)
+        changed += 1
+    if dst.exists():
+        for f in sorted(dst.rglob("*"), reverse=True):
+            rel = f.relative_to(dst)
+            if f.is_dir():
+                if not any(f.iterdir()):
+                    f.rmdir()
+            elif rel not in want:
+                f.unlink()
+                changed += 1
+    return changed
+
+
+class Timer:
+    """Wall time per build step, printed at the end of the build."""
+
+    def __init__(self):
+        self.steps: list[tuple[str, float]] = []
+        self.t = time.time()
+
+    def lap(self, label: str) -> None:
+        now = time.time()
+        self.steps.append((label, now - self.t))
+        self.t = now
+
+    def summary(self) -> str:
+        return ", ".join(f"{n} {s:.1f}s" for n, s in self.steps if s >= 0.05)
 
 
 @dataclass
@@ -210,21 +337,31 @@ SUBSETS = {
 }
 
 
-def subset_font(src: Path, unicodes: str, dst: Path) -> Path:
+def subset_font(src: Path, unicodes: str, cache: Path) -> Path:
+    """The subset of src, made once per (font bytes, ranges, fontTools
+    version) and kept in cache/ for later builds."""
     try:
+        import fontTools
         from fontTools import subset
     except ImportError:
         log(f"fontTools not installed; embedding {src.name} whole")
         return src
+    key = digest(src.read_bytes(), unicodes, fontTools.version)[:16]
+    dst = cache / f"{key}-{src.name}"
+    if dst.is_file():
+        return dst
+    cache.mkdir(parents=True, exist_ok=True)
+    tmp = cache / f".{dst.name}.tmp"
     subset.main(
         [
             str(src),
             f"--unicodes={unicodes}",
-            f"--output-file={dst}",
+            f"--output-file={tmp}",
             "--layout-features=*",
             "--no-hinting",
         ]
     )
+    tmp.replace(dst)
     log(
         f"font {src.name}: {src.stat().st_size // 1024} KB -> {dst.stat().st_size // 1024} KB"
     )
@@ -302,7 +439,12 @@ def project_docs(args, tools: Tools, project: Path, bdir: Path, gen: Path):
     return docs
 
 
-def project_site(args, tools: Tools, wit: Path, out: Path):
+def wit_digest(wit: Path) -> str:
+    files = sorted(wit.rglob("*.wit")) if wit.is_dir() else [wit]
+    return digest(*files)
+
+
+def project_site(args, tools: Tools, wit: Path, out: Path, stamps: "Stamps | None" = None):
     """<out>.md (wit-bindgen markdown) and the docs site <out>-docs/ (mkdocs.yml,
     docs/, site/ built with Zensical or MkDocs). --site auto (default) skips
     the site quietly when neither is installed and warns if the build fails;
@@ -310,24 +452,37 @@ def project_site(args, tools: Tools, wit: Path, out: Path):
     from qt2wasm import mdsite
 
     world = getattr(args, "world", None)
+    mode = getattr(args, "site", "auto") or "auto"
+    builder = mdsite.find_builder() if mode != "none" else None
+    sdir = out.parent / f"{out.stem}-docs"
+    key = digest("site", wit_digest(wit), world, out.stem, mode, builder, tools.wit_bindgen,
+                 *sorted(Path(mdsite.__file__).parent.glob("mdsite.py")))
+    if stamps and stamps.fresh("site", key):
+        site = sdir / "site" if builder else None
+        log(f"site: {site / 'index.html' if site else out.with_suffix('.md')} (unchanged)")
+        return site
+    if stamps:
+        stamps.drop("site")
     try:
         md = mdsite.markdown(
             wit, out.parent, name=out.stem, world=world, wit_bindgen=tools.wit_bindgen
         )
     except Exception as e:
         raise BuildError(str(e)) from e
-    mode = getattr(args, "site", "auto") or "auto"
     if mode == "none":
+        if stamps:
+            stamps.record("site", key, [md])
         return None
-    if mdsite.find_builder() is None:
+    if builder is None:
         if mode == "always":
             raise BuildError(
                 "--site always: neither zensical nor mkdocs found (install "
                 "zensical from conda-forge or PyPI, or set QT2WASM_SITE_BUILDER)"
             )
         log(f"site: no zensical or mkdocs found, only {md.name}")
+        if stamps:
+            stamps.record("site", key, [md])
         return None
-    sdir = out.parent / f"{out.stem}-docs"
     try:
         cfg = mdsite.mkdocs_project(
             [wit], sdir, world=world, wit_bindgen=tools.wit_bindgen
@@ -338,11 +493,13 @@ def project_site(args, tools: Tools, wit: Path, out: Path):
             raise BuildError(str(e)) from e
         log(f"site: failed, only {md.name}: {str(e).splitlines()[0]}")
         return None
+    if stamps:
+        stamps.record("site", key, [md, site / "index.html"])
     log(f"site: {site / 'index.html'}")
     return site
 
 
-def project_js(args, out: Path):
+def project_js(args, out: Path, stamps: "Stamps | None" = None):
     """<out>-js/: jco transpile + loader (qt2wasm.jsgen), or None. --js auto
     (default) skips quietly without jco and warns if it fails; --js always
     makes either an error; --js none turns it off."""
@@ -358,18 +515,41 @@ def project_js(args, out: Path):
                              "https://prefix.dev/nandi-testing, or set QT2WASM_JCO)")
         log("js: no jco found, no JS bindings (set QT2WASM_JCO)")
         return None
+    key = digest("js", out, jco, Path(jsgen.__file__))
+    dst = out.parent / f"{out.stem}-js"
+    if stamps and stamps.fresh("js", key):
+        log(f"js: {dst / 'index.js'} (unchanged)")
+        return dst
     try:
-        dst = jsgen.transpile(out, out.parent / f"{out.stem}-js", out.stem, jco)
+        dst = jsgen.transpile(out, dst, out.stem, jco)
     except jsgen.JsError as e:
         if mode == "always":
             raise BuildError(str(e)) from e
         log(f"js: failed, no JS bindings: {str(e).splitlines()[0]}")
         return None
+    if stamps:
+        stamps.record("js", key, [dst / "index.js"])
     log(f"js: {dst / 'index.js'} (jco {jco})")
     return dst
 
 
-def project_qch(args, tools: Tools, project: Path, bdir: Path, gen: Path, out: Path):
+def source_digest(*dirs: Path, skip: tuple = ()) -> str:
+    """Digest of the C++/qdoc sources under dirs (what qdoc reads)."""
+    files = []
+    for d in dirs:
+        for f in sorted(d.rglob("*")):
+            if f.suffix not in (".h", ".hpp", ".cpp", ".qdoc", ".qdocconf") or not f.is_file():
+                continue
+            if any(s in f.parents for s in skip) or any(
+                p.name.startswith(".") for p in f.relative_to(d).parents if p.name
+            ):
+                continue
+            files.append(f)
+    return digest(*files)
+
+
+def project_qch(args, tools: Tools, project: Path, bdir: Path, gen: Path, out: Path,
+                stamps: "Stamps | None" = None):
     """qdoc HTML + qhelpgenerator -> <out>.qch, or None. --qch auto (default)
     skips quietly when either tool is missing and warns if one fails;
     --qch always makes either an error. --docs none turns it off too."""
@@ -390,6 +570,10 @@ def project_qch(args, tools: Tools, project: Path, bdir: Path, gen: Path, out: P
         log(f"qch: no {missing} found, no Qt Help file")
         return None
     qch = out.with_suffix(".qch")
+    key = digest("qch", qdoc, qhg, out.stem, source_digest(project, ROOT / "include", skip=(bdir, project / "build")))
+    if stamps and stamps.fresh("qch", key):
+        log(f"qch: {qch} (unchanged)")
+        return qch
     try:
         qch, qlog = qdocs.run_qch(
             qdoc,
@@ -407,12 +591,15 @@ def project_qch(args, tools: Tools, project: Path, bdir: Path, gen: Path, out: P
         log(f"qch: failed, no Qt Help file: {str(e).splitlines()[0]}")
         return None
     (gen / "qch" / "qch.log").write_text(qlog)
+    if stamps:
+        stamps.record("qch", key, [qch])
     log(f"qch: {qch}")
     return qch
 
 
 def build(args) -> Path:
     t0 = time.time()
+    timer = Timer()
     project = Path(args.project).resolve()
     if not (project / "CMakeLists.txt").exists():
         raise BuildError(f"{project} has no CMakeLists.txt")
@@ -421,7 +608,13 @@ def build(args) -> Path:
         if args.build_dir
         else project / "build" / "qt2wasm"
     )
-    gen = bdir / "gen"
+    stamps = Stamps(bdir, enabled=not getattr(args, "clean", False))
+    if getattr(args, "clean", False):
+        for d in ("gen", "cmake", "stamps"):
+            shutil.rmtree(bdir / d, ignore_errors=True)
+    # Generated sources are written to gen.new/, then synced into gen/ (only
+    # changed files are rewritten), so ninja recompiles only what changed.
+    gen = bdir / "gen.new"
     if gen.exists():
         shutil.rmtree(gen)
     (gen / "bindings").mkdir(parents=True)
@@ -438,6 +631,13 @@ def build(args) -> Path:
         args.wit, args.world = str(ROOT / "gui" / "wit"), gui
         if args.qpa == "offscreen":
             args.qpa = "qt2wasmgui"
+    dev = getattr(args, "dev", False)
+    if dev:
+        args.no_wasm_opt = True
+        args.js = "none"
+        args.site = "none"
+        args.qch = "none"
+        log("dev build: no wasm-opt, docs site, Qt Help file or JS bindings")
 
     # 2. moc
     headers = find_headers(project, bdir)
@@ -463,6 +663,7 @@ def build(args) -> Path:
     if gui:
         run([tools.moc, ROOT / "gui" / "qt2wasmgui.h", "-o", gen / "runtime" / "moc_qt2wasmgui.cpp"])
     log(f"moc: {len(headers)} header(s)")
+    timer.lap("moc")
 
     # 3. codegen
     if args.wit:
@@ -504,25 +705,33 @@ def build(args) -> Path:
         (gen / "glue.cpp").write_text(
             gluegen.generate(m, gen / "bindings" / "component.h")
         )
-        log(f"codegen: {len(m.classes)} class(es) -> {wit_dir / 'component.wit'}")
+        log(f"codegen: {len(m.classes)} class(es) -> {bdir / 'gen' / 'wit' / 'component.wit'}")
+    out.parent.mkdir(parents=True, exist_ok=True)
     if not args.wit:
-        out.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(wit_dir / "component.wit", out.with_suffix(".wit"))
     elif gui:
-        out.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(wit_dir / "gui.wit", out.with_suffix(".wit"))
-    out.parent.mkdir(parents=True, exist_ok=True)
-    project_qch(args, tools, project, bdir, gen, out)
-    project_site(args, tools, wit_dir if args.wit and not gui else out.with_suffix(".wit"), out)
-    if getattr(args, "docs_only", False):
-        log(f"docs only: {out.with_suffix('.wit')} and friends in {time.time() - t0:.1f}s")
-        return out.with_suffix(".wit")
-    if args.font:
+    timer.lap("codegen")
+    project_qch(args, tools, project, bdir, gen, out, stamps)
+    timer.lap("qch")
+    project_site(args, tools, wit_dir if args.wit and not gui else out.with_suffix(".wit"), out, stamps)
+    timer.lap("site")
+    if args.font and not getattr(args, "docs_only", False):
         fonts = [Path(f).resolve() for f in args.font]
         if args.font_subset != "none":
             ranges = SUBSETS.get(args.font_subset, args.font_subset)
-            fonts = [subset_font(f, ranges, gen / f"subset-{f.name}") for f in fonts]
+            fonts = [subset_font(f, ranges, bdir / "fonts") for f in fonts]
         write_fonts(fonts, gen / "fonts.cpp")
+        timer.lap("fonts")
+
+    # gen.new -> gen: only changed files get a new mtime.
+    changed = sync_tree(gen, bdir / "gen")
+    shutil.rmtree(gen)
+    gen = bdir / "gen"
+    log(f"generated sources: {changed} file(s) changed")
+    if getattr(args, "docs_only", False):
+        log(f"docs only: {out.with_suffix('.wit')} and friends in {time.time() - t0:.1f}s")
+        return out.with_suffix(".wit")
 
     # 4. cmake
     cmk = bdir / "cmake"
@@ -551,8 +760,25 @@ def build(args) -> Path:
     ]
     if tools.compat:
         cfg.append(f"-DQT2WASM_COMPAT_DIR={tools.compat}")
-    run(cfg, env=wasm_env())
-    run(["cmake", "--build", cmk], env=wasm_env())
+    # Configure again only when the arguments, the toolchain or the set of
+    # generated files (Qt2Wasm.cmake globs them) changed; ninja re-runs CMake
+    # by itself when a CMakeLists.txt changes.
+    gen_files = sorted(str(f.relative_to(gen)) for f in gen.rglob("*") if f.is_file())
+    cfg_key = digest("cmake", *map(str, cfg), *gen_files)
+    if (cmk / "build.ninja").is_file() and stamps.fresh("configure", cfg_key):
+        log("cmake: configured (unchanged)")
+    else:
+        stamps.drop("configure")
+        run(cfg, env=wasm_env())
+        stamps.record("configure", cfg_key, [cmk / "build.ninja"])
+        timer.lap("configure")
+    r = run(["cmake", "--build", cmk], env=wasm_env())
+    if "no work to do" in r.stdout:
+        log("cmake: up to date")
+    else:
+        n = len(re.findall(r"^\[\d+/\d+\] Building", r.stdout, re.MULTILINE))
+        log(f"cmake: built ({n} source(s) compiled)")
+    timer.lap("compile+link")
     cores = sorted(cmk.glob("*.core.wasm"))
     if len(cores) != 1:
         raise BuildError(
@@ -564,19 +790,17 @@ def build(args) -> Path:
     # 5. optimise
     if tools.wasm_opt and not args.no_wasm_opt:
         opt_core = bdir / "opt.core.wasm"
-        run(
-            [
-                tools.wasm_opt,
-                opt,
-                "--strip-debug",
-                "--strip-producers",
-                core,
-                "-o",
-                opt_core,
-            ]
-        )
+        cmd = [tools.wasm_opt, opt, "--strip-debug", "--strip-producers", core, "-o", opt_core]
+        key = digest("wasm-opt", *map(str, cmd), core)
+        if stamps.fresh("wasm-opt", key):
+            log(f"wasm-opt {opt}: core unchanged, reusing {opt_core.name}")
+        else:
+            stamps.drop("wasm-opt")
+            run(cmd)
+            stamps.record("wasm-opt", key, [opt_core])
         core = opt_core
         sizes.append((f"wasm-opt {opt}", core.stat().st_size))
+        timer.lap("wasm-opt")
     else:
         log("wasm-opt not found or disabled; skipping")
 
@@ -589,15 +813,24 @@ def build(args) -> Path:
             "no wasi_snapshot_preview1 reactor adapter (QT2WASM_ADAPTER); "
             "get it from a wasmtime release matching your host"
         )
-    run(cmd)
+    key = digest("component", *map(str, cmd), core, tools.adapter, tools.wasm_tools)
+    if stamps.fresh("component", key):
+        log(f"component: core unchanged, {out.name} is up to date")
+    else:
+        stamps.drop("component")
+        run(cmd)
+        # 7. check
+        run([tools.wasm_tools, "validate", out])
+        stamps.record("component", key, [out])
     sizes.append(("component", out.stat().st_size))
-
-    # 7. check
-    run([tools.wasm_tools, "validate", out])
     imports = imports_of(tools.wasm_tools, out)
+    timer.lap("component")
     log(f"done in {time.time() - t0:.1f}s: {out}")
     for label, n in sizes:
         log(f"  {label:<20} {n / 1e6:8.2f} MB")
     log("  imports: " + (", ".join(imports) or "none"))
-    project_js(args, out)
+    project_js(args, out, stamps)
+    timer.lap("js")
+    if timer.summary():
+        log(f"  times: {timer.summary()}")
     return out
