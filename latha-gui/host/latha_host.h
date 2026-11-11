@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only
 //
 // C API of latha-host (src/lib.rs): one latha:gui component on wasmtime.
-// All calls on one thread; callbacks run inside the call that caused them.
+// All calls on one thread; callbacks run inside the call that caused them,
+// except `wake`. The engine has wasm exceptions, tail calls and SIMD on;
+// programs get wasi:sockets and latha:proc (../../qt2wasm/proc/wit/proc.wit).
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
@@ -38,6 +40,9 @@ typedef struct {
     void (*pty_resize)(void *user, uint32_t id, uint16_t cols, uint16_t rows);
     int (*pty_exit_code)(void *user, uint32_t id, int32_t *code);
     void (*pty_close)(void *user, uint32_t id);
+    // Called from ANY thread when a latha:proc message (or a close) arrived for
+    // the app; call latha_tick soon on the GUI thread. NULL: not called.
+    void (*wake)(void *user);
 } LathaCallbacks;
 
 typedef struct { int32_t x, y; uint32_t width, height; } LathaRect;
@@ -65,6 +70,14 @@ typedef struct {
     size_t ndirs;
     int no_cache;
 } LathaOptions;
+
+// What PATH is: 0 not wasm, 1 a core module, 2 a WASI command component
+// (exports wasi:cli/run, not latha:gui/app), 3 another component (a latha:gui app).
+int latha_wasm_kind(const char *path);
+// Run a WASI command (kind 1 or 2) to its end without a window, on its own
+// big-stack thread, with latha:proc; returns its exit code, or -1 (and *err)
+// if it could not start.
+int latha_run(const char *path, const LathaOptions *opts, const LathaStr *args, size_t nargs, char **err);
 
 LathaApp *latha_load(const char *path, const LathaOptions *opts, const LathaCallbacks *cb,
                      const LathaStr *args, size_t nargs, char **err);

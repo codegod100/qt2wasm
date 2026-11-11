@@ -63,10 +63,11 @@ the desktop entry and `.wasm` files in the file manager use it.
 
 | Part | What |
 | --- | --- |
-| `host/` (Rust) | wasmtime 50 + wasmtime-wasi (preview 2): loads and instantiates the component (`bindgen!` on `gui-pty`, so plain `gui` apps load too), caches compiled code in `~/.cache/latha-gui`, and has a small C API ([`host/latha_host.h`](host/latha_host.h)). Imports are function pointers into the Qt side. |
+| `host/` (Rust) | wasmtime 50 + wasmtime-wasi (preview 2, and preview 1 for commands): loads and instantiates the component (`bindgen!` on `gui-pty`, so plain `gui` apps load too), caches compiled code in `~/.cache/latha-gui`, and has a small C API ([`host/latha_host.h`](host/latha_host.h)). Imports are function pointers into the Qt side. |
 | `appmeta.cpp` | the app's id, name and icon (custom sections) |
 | `main.cpp` | arguments, the import callbacks (clipboard, primary selection, title, cursor, bell, quit) |
 | `window.cpp` | the window (a `QWidget`): event loop pump, input mapping, frame copy |
+| `host/src/procs.rs` | latha:proc (processes on threads, channels), WASI commands |
 | `latha_pty.cpp` | `latha:gui/pty`: `forkpty`, output read on the Qt loop |
 | `build.sh` | `cargo build` the host, then CMake the window: `build/latha-gui` |
 
@@ -112,6 +113,52 @@ one.
 Keys are X11 keysyms (Qt's `nativeVirtualKey` on xcb and Wayland), the
 scancode is evdev + 8, coordinates are device pixels (`devicePixelRatio`
 applied, fractional scales too).
+
+## WASI commands, engine features, network
+
+`latha-gui APP.wasm` also runs a plain WASI command: a core module with
+preview 1 (what wasi-sdk's `--target=wasm32-wasip1` links) or a component
+that exports `wasi:cli/run`. It runs in the terminal, without Qt or a window,
+on its own thread with a 256 MiB wasm stack, with the current directory open
+as `.` as well as `/`; its exit code is ours. `latha-run` (built next to
+latha-gui, no Qt needed) does only that:
+
+```sh
+latha-run [--dir HOST[::GUEST]]... [--no-root] [--no-cache] [--no-network] APP.wasm [ARGS...]
+latha-gui js.wasm -c 'print(6 * 7)'      # webby's wasm/ build of Ladybird's js
+```
+
+Every engine (app and commands) has wasm exception handling (exnref, which
+wasi-sdk's `-mllvm -wasm-enable-sjlj -mllvm -wasm-use-legacy-eh=false
+-lsetjmp` emits for setjmp/longjmp), tail calls (`-mtail-call`, clang's
+`musttail`), SIMD and GC types on. Programs get `wasi:sockets` (TCP, UDP,
+name lookup) as a native program would; `LATHA_GUI_NETWORK=0` turns that off.
+
+## Processes and channels: latha:proc
+
+For multi-process programs (webby: Ladybird's WebContent, RequestServer and
+ImageDecoder), any program can start other wasm programs as processes and talk
+to them over channels, [`../qt2wasm/proc/wit/proc.wit`](../qt2wasm/proc/wit/proc.wit)
+(components) or the same calls as core imports from the module `latha:proc`,
+[`../qt2wasm/proc/latha_proc.h`](../qt2wasm/proc/latha_proc.h) (wasip1 modules):
+
+- `spawn(path, args)`: a new instance of a module or command component (""
+  = the caller's own .wasm, relative paths from its directory) on its own
+  native thread with a big stack; returns a pid and our end of a channel whose
+  other end is the child's `parent()`. `wait-exit`, `kill` (the child traps at
+  its next loop or call; checked every 10 ms by the engine's epoch).
+- channels: `pair`, `send(h, bytes, handles)` (never blocks; the handles move
+  to the receiver, like SCM_RIGHTS), `recv(h, timeout)`, `wait(handles,
+  timeout)`, `close`. Closing an end (or the process ending) shows up on the
+  other end as `closed` once it has read what was queued.
+
+Each process has its own store and memory; nothing is shared but messages,
+which are copied (16 MiB, 256 handles at most). All processes of a run share
+one engine and its compiled-code cache. In latha-gui, the window's app may use
+latha:proc too: its `tick` runs soon after a message arrives for it (the host's
+thread-safe `wake` callback), so it reads its channels with timeout 0 there.
+`tests/proc-test.sh` (wasi-sdk 27) checks all of it and the two engine
+features.
 
 Limits: one window per app, no drag and drop, core modules are not wrapped
 into components (perry-gui does that with wasm-tools; build a component).

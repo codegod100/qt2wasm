@@ -6,7 +6,7 @@
 #
 #   rattler-build build -r recipes/latha-gui -c conda-forge -c https://prefix.dev/nandi-testing
 context:
-  version: "0.2.4"
+  version: "0.3.0"
 
 package:
   name: latha-gui
@@ -19,6 +19,7 @@ source:
     include:
       - latha-gui/**
       - qt2wasm/gui/wit/**
+      - qt2wasm/proc/**
 
 build:
   number: 0
@@ -28,6 +29,9 @@ build:
     - export CARGO_HOME=$SRC_DIR/.cargo-home
     - bash latha-gui/build.sh
     - install -Dm755 latha-gui/build/latha-gui $PREFIX/bin/latha-gui
+    - install -Dm755 latha-gui/build/latha-run $PREFIX/bin/latha-run
+    - install -Dm644 qt2wasm/proc/wit/proc.wit $PREFIX/share/latha-gui/proc.wit
+    - install -Dm644 qt2wasm/proc/latha_proc.h $PREFIX/share/latha-gui/latha_proc.h
     - install -Dm644 qt2wasm/gui/wit/gui.wit $PREFIX/share/latha-gui/gui.wit
     - install -Dm644 latha-gui/README.md $PREFIX/share/latha-gui/README.md
     - install -Dm644 latha-gui/icons/latha-gui.svg $PREFIX/share/icons/hicolor/scalable/apps/latha-gui.svg
@@ -50,6 +54,8 @@ requirements:
 tests:
   - script:
       - latha-gui --help
+      - latha-run --help || test $? = 2
+      - test -f $PREFIX/share/latha-gui/proc.wit
       - test -f $PREFIX/share/latha-gui/gui.wit
       - test -f $PREFIX/share/icons/hicolor/scalable/apps/latha-gui.svg
 

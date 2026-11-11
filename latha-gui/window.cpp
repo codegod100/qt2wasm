@@ -278,6 +278,12 @@ void AppWindow::requestFrame()
     schedulePump();
 }
 
+void AppWindow::procWake()
+{
+    m_tickNow = true;
+    schedulePump();
+}
+
 void AppWindow::requestTick(quint32 ms)
 {
     m_tickAt = m_clock.elapsed() + ms;

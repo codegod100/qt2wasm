@@ -42,6 +42,8 @@ public:
     Pty *pty(quint32 id);
     void ptyClose(quint32 id);
     bool prefersDark() const;
+    /// A latha:proc message arrived (posted from the host's wake callback).
+    void procWake();
 
     /// The app trapped or asked to quit: leave with `code`.
     void finish(int code);

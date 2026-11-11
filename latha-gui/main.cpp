@@ -193,11 +193,23 @@ void cbPtyClose(void *u, uint32_t id)
         w->ptyClose(id);
 }
 
+// From any thread (latha:proc): hop to the GUI thread.
+void cbWake(void *)
+{
+    if (!qApp)
+        return;
+    QMetaObject::invokeMethod(qApp, [] {
+        if (g_window)
+            g_window->procWake();
+    }, Qt::QueuedConnection);
+}
+
 void usage(FILE *f)
 {
     fprintf(f,
             "usage: latha-gui [options] APP.wasm [args...]\n"
-            "  runs a latha:gui component (gui/wit/gui.wit) in a window\n"
+            "  runs a latha:gui component (gui/wit/gui.wit) in a window, or a WASI command\n"
+            "  (core module or wasi:cli/run component) in the terminal, without one\n"
             "options:\n"
             "  --dir HOST[::GUEST]   let the app open HOST (as GUEST, default the same path)\n"
             "                        (/ is always open as /, unless --no-root)\n"
@@ -299,6 +311,35 @@ int main(int argc, char **argv)
             size = QSize(p[0].toInt(), p[1].toInt());
     }
 
+    // A WASI command (js.wasm, a test runner, ...): run it here, in the
+    // terminal, without Qt or a window; the current directory is "." too.
+    const int kind = latha_wasm_kind(wasmPath.constData());
+    if (kind == 1 || kind == 2) {
+        if (!noRoot && !guestDirs.contains(".")) {
+            dirs << ".";
+            guestDirs << ".";
+        }
+        QList<QByteArray> cargs{QFileInfo(QString::fromLocal8Bit(wasmPath)).fileName().toUtf8()};
+        for (int j = i + 1; j < argc; ++j)
+            cargs << QByteArray(argv[j]);
+        std::vector<LathaStr> ca, hd, gd;
+        for (const auto &a : cargs)
+            ca.push_back(LathaStr{a.constData(), size_t(a.size())});
+        for (int j = 0; j < dirs.size(); ++j) {
+            hd.push_back(LathaStr{dirs[j].constData(), size_t(dirs[j].size())});
+            gd.push_back(LathaStr{guestDirs[j].constData(), size_t(guestDirs[j].size())});
+        }
+        LathaOptions clo{hd.data(), gd.data(), hd.size(), noCache ? 1 : 0};
+        char *cerr = nullptr;
+        const int code = latha_run(wasmPath.constData(), &clo, ca.data(), ca.size(), &cerr);
+        if (code < 0) {
+            fprintf(stderr, "latha-gui: %s\n", cerr ? cerr : "cannot run");
+            latha_string_free(cerr);
+            return 2;
+        }
+        return code;
+    }
+
     // The app's own id, name and icon (custom sections, appmeta.h): its id is
     // the Wayland app id / WM_CLASS, so the desktop groups and labels it as
     // itself (and uses id.desktop when there is one); without one it is a
@@ -375,6 +416,7 @@ int main(int argc, char **argv)
     cb.pty_resize = cbPtyResize;
     cb.pty_exit_code = cbPtyExitCode;
     cb.pty_close = cbPtyClose;
+    cb.wake = cbWake;
     LathaOptions lo{hostDirs.data(), gDirs.data(), hostDirs.size(), noCache ? 1 : 0};
 
     QElapsedTimer t;

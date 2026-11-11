@@ -1,0 +1,87 @@
+/// latha:proc: processes and message channels for wasm programs.
+///
+/// A wasm program (a WASI command, or a latha:gui app) can start other wasm
+/// programs as "processes": each is its own instance, with its own linear
+/// memory, running on its own native thread of the host. They talk over
+/// channels: a channel is a pair of endpoints, a message is bytes plus
+/// endpoints moved along with it (like file descriptors over a Unix socket,
+/// SCM_RIGHTS). This is what multi-process programs (Ladybird's WebContent,
+/// RequestServer, ImageDecoder) use in place of fork/exec and socketpairs.
+///
+/// Handles are small integers, private to an instance. An endpoint sent in a
+/// message leaves the sender's table and gets a new handle in the receiver's.
+/// An endpoint is closed when its handle is closed, or its instance ends; the
+/// other side then reads what was queued and then `closed`.
+///
+/// The same functions exist for core modules (no component model) as imports
+/// from the module "latha:proc", see ../latha_proc.h.
+package latha:proc@0.1.0;
+
+interface channels {
+    /// An endpoint handle.
+    type handle = u32;
+
+    enum error {
+        /// The other endpoint is gone (and nothing is queued any more).
+        closed,
+        /// Nothing arrived before the timeout.
+        timeout,
+        /// Not a handle of this instance (or sent along with itself).
+        bad-handle,
+        /// A message over the host's limit (16 MiB, 256 handles).
+        too-big,
+    }
+
+    record message {
+        data: list<u8>,
+        handles: list<handle>,
+    }
+
+    /// A new channel: two connected endpoints.
+    pair: func() -> tuple<handle, handle>;
+
+    /// Queue a message on `h` for its peer. Never blocks. The endpoints in
+    /// `handles` move with it (they are no longer ours, even if the peer is
+    /// gone).
+    send: func(h: handle, data: list<u8>, handles: list<handle>) -> result<_, error>;
+
+    /// The next message on `h`. `timeout-ms`: 0 = do not wait, < 0 = wait
+    /// for ever.
+    recv: func(h: handle, timeout-ms: s32) -> result<message, error>;
+
+    /// Wait until one of `hs` has a message (or its peer closed), at most
+    /// `timeout-ms` (< 0 for ever). Returns the indices into `hs` that are
+    /// ready (empty after a timeout).
+    wait: func(hs: list<handle>, timeout-ms: s32) -> list<u32>;
+
+    /// Close our endpoint.
+    close: func(h: handle);
+
+    /// The endpoint a process was started with (its parent's channel), once.
+    parent: func() -> option<handle>;
+}
+
+interface process {
+    use channels.{handle};
+
+    /// Start `path` (a core wasm module with WASI preview 1, or a WASI command
+    /// component) as a new process on its own thread. `args` are its
+    /// arguments, its name first. A relative path is relative to the
+    /// directory of the caller's own .wasm; "" means the caller's own module.
+    /// The child sees the same directories and environment as we do. Returns
+    /// its pid and our end of a channel whose other end is the child's
+    /// `parent()`.
+    spawn: func(path: string, args: list<string>) -> result<tuple<u32, handle>, string>;
+
+    /// The exit code of a child once it ended (`timeout-ms` as for recv),
+    /// else none. A child that trapped exits with 128 + 6.
+    wait-exit: func(pid: u32, timeout-ms: s32) -> option<s32>;
+
+    /// Ask a child to stop: it traps at its next loop back edge or call.
+    kill: func(pid: u32);
+}
+
+world proc {
+    import channels;
+    import process;
+}

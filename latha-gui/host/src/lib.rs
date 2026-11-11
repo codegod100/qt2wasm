@@ -12,12 +12,14 @@
 // it straight into the GUI's frame buffer (latha_frame_pixels), so a frame
 // row is never copied twice on our side.
 
+pub mod procs;
+
 use base64::Engine as _;
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::path::{Path, PathBuf};
 use wasmtime::component::{Component, HasSelf, Linker, ResourceTable};
 use wasmtime::error::Context as _;
-use wasmtime::{format_err, Config, Engine, Result, Store};
+use wasmtime::{format_err, Engine, Result, Store};
 use wasmtime_wasi::{FsPerms, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
 wasmtime::component::bindgen!({
@@ -88,6 +90,10 @@ pub struct LathaCallbacks {
     /// 1 and `*code` once it ended and its output was read, else 0.
     pub pty_exit_code: extern "C" fn(*mut c_void, u32, *mut i32) -> c_int,
     pub pty_close: extern "C" fn(*mut c_void, u32),
+    /// Called from ANY thread when a latha:proc message (or a child's close)
+    /// arrived for the app: the GUI should soon call latha_tick, which is
+    /// when the app looks at its channels. NULL: never called.
+    pub wake: Option<extern "C" fn(*mut c_void)>,
 }
 
 #[repr(C)]
@@ -150,6 +156,7 @@ struct Host {
     cb: LathaCallbacks,
     wasi: WasiCtx,
     table: ResourceTable,
+    proc: procs::ProcState,
 }
 
 // SAFETY: the store and its callbacks only ever run on the GUI's thread.
@@ -297,9 +304,17 @@ fn cache_dir() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache").join("latha-gui"))
 }
 
-/// Compiled code is cached by (our version, the engine's settings, the
-/// bytes): ~seconds to compile a Qt app, milliseconds to load it again.
-fn load_component(engine: &Engine, bytes: &[u8], use_cache: bool) -> Result<Component> {
+/// Compiled code (a Module or a Component) is cached by (our version, the
+/// engine's settings, the bytes): ~seconds to compile a Qt app, milliseconds
+/// to load it again.
+pub(crate) fn load_cached<T>(
+    engine: &Engine,
+    bytes: &[u8],
+    use_cache: bool,
+    deserialize: impl Fn(&Engine, &Path) -> Result<T>,
+    compile: impl Fn(&Engine, &[u8]) -> Result<T>,
+    serialize: impl Fn(&T) -> Result<Vec<u8>>,
+) -> Result<T> {
     use sha2::{Digest, Sha256};
     use std::hash::{Hash, Hasher};
     let cached = if use_cache { cache_dir() } else { None };
@@ -322,9 +337,10 @@ fn load_component(engine: &Engine, bytes: &[u8], use_cache: bool) -> Result<Comp
     });
     if let Some(p) = &path {
         if p.exists() {
-            // SAFETY: we wrote this file with Component::serialize for an
-            // engine with the same compatibility hash (it is in the key).
-            match unsafe { Component::deserialize_file(engine, p) } {
+            // `deserialize` is unsafe underneath: we wrote this file with
+            // serialize for an engine with the same compatibility hash (it is
+            // in the key).
+            match deserialize(engine, p) {
                 Ok(c) => return Ok(c),
                 Err(_) => {
                     let _ = std::fs::remove_file(p);
@@ -332,9 +348,9 @@ fn load_component(engine: &Engine, bytes: &[u8], use_cache: bool) -> Result<Comp
             }
         }
     }
-    let component = Component::new(engine, bytes)?;
+    let compiled = compile(engine, bytes)?;
     if let Some(p) = &path {
-        if let Ok(data) = component.serialize() {
+        if let Ok(data) = serialize(&compiled) {
             if let Some(dir) = p.parent() {
                 let _ = std::fs::create_dir_all(dir);
             }
@@ -344,7 +360,41 @@ fn load_component(engine: &Engine, bytes: &[u8], use_cache: bool) -> Result<Comp
             }
         }
     }
-    Ok(component)
+    Ok(compiled)
+}
+
+fn load_component(engine: &Engine, bytes: &[u8], use_cache: bool) -> Result<Component> {
+    load_cached(
+        engine,
+        bytes,
+        use_cache,
+        |e, p| unsafe { Component::deserialize_file(e, p) },
+        |e, b| Component::new(e, b),
+        |c| c.serialize(),
+    )
+}
+
+/// The directories and environment an app (and every process it starts) gets.
+fn run_options(opts: Option<&LathaOptions>) -> procs::RunOptions {
+    let mut o = procs::RunOptions {
+        // Our environment, minus Qt's own settings: they are for this window,
+        // not for the app's Qt (QT_QPA_PLATFORM=offscreen would kill it).
+        env: std::env::vars()
+            .filter(|(k, _)| !(k.starts_with("QT_") || k.starts_with("QML") || k.starts_with("QSG_")))
+            .collect(),
+        // wasi:sockets (TCP, UDP, name lookup) like a native program.
+        network: std::env::var("LATHA_GUI_NETWORK").as_deref() != Ok("0"),
+        cache: opts.map_or(true, |o| o.no_cache == 0) && std::env::var("LATHA_GUI_CACHE").as_deref() != Ok("0"),
+        dirs: Vec::new(),
+    };
+    if let Some(op) = opts {
+        for i in 0..op.ndirs {
+            let host = unsafe { str_of(&*op.dirs.add(i)) };
+            let guest = unsafe { str_of(&*op.guest_dirs.add(i)) };
+            o.dirs.push((host.to_string(), guest.to_string()));
+        }
+    }
+    o
 }
 
 fn imports_pty(component: &Component, engine: &Engine) -> bool {
@@ -354,45 +404,61 @@ fn imports_pty(component: &Component, engine: &Engine) -> bool {
         .any(|(name, _)| name.starts_with("latha:gui/pty"))
 }
 
+/// The app's `user` pointer, for the wake hook (which may run on any thread;
+/// the GUI promises its `wake` callback is thread-safe).
+struct WakeUser(*mut c_void, extern "C" fn(*mut c_void));
+unsafe impl Send for WakeUser {}
+unsafe impl Sync for WakeUser {}
+impl WakeUser {
+    fn call(&self) {
+        (self.1)(self.0)
+    }
+}
+
 fn load(path: &Path, opts: Option<&LathaOptions>, cb: LathaCallbacks, args: &[String]) -> Result<LathaApp> {
     let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
-    if bytes.len() >= 8 && bytes[0..4] == *b"\0asm" && bytes[4] == 1 && bytes[6] == 0 {
+    if matches!(procs::wasm_kind(&bytes), Some(procs::WasmKind::Core)) {
         return Err(format_err!(
-            "{} is a core module, not a component (wrap it with `wasm-tools component new`)",
+            "{} is a core module, not a latha:gui component (a WASI command? latha_run runs those)",
             path.display()
         ));
     }
-    let mut config = Config::new();
+    let mut config = procs::base_config();
     config.wasm_component_model(true);
-    config.parallel_compilation(true);
     let engine = Engine::new(&config)?;
-    let use_cache = opts.map_or(true, |o| o.no_cache == 0) && std::env::var("LATHA_GUI_CACHE").as_deref() != Ok("0");
-    let component = load_component(&engine, &bytes, use_cache)?;
+    let ro = run_options(opts);
+    let component = load_component(&engine, &bytes, ro.cache)?;
     let has_pty = imports_pty(&component, &engine);
 
     let mut linker: Linker<Host> = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
     GuiPty::add_to_linker::<Host, HasSelf<Host>>(&mut linker, |h| h)?;
+    procs::add_component_imports(&mut linker, |h: &mut Host| &mut h.proc)?;
     stub_newer_imports(&mut linker, &component, &engine)?;
 
     let mut wasi = WasiCtxBuilder::new();
     wasi.inherit_stdio().args(args);
-    // Our environment, minus Qt's own settings: they are for this window,
-    // not for the app's Qt (QT_QPA_PLATFORM=offscreen would kill it).
-    for (k, v) in std::env::vars() {
-        if !(k.starts_with("QT_") || k.starts_with("QML") || k.starts_with("QSG_")) {
-            wasi.env(&k, &v);
-        }
+    for (k, v) in &ro.env {
+        wasi.env(k, v);
     }
-    if let Some(o) = opts {
-        for i in 0..o.ndirs {
-            let host = unsafe { str_of(&*o.dirs.add(i)) };
-            let guest = unsafe { str_of(&*o.guest_dirs.add(i)) };
-            wasi.preopened_dir(host, guest, FsPerms::ReadWrite)
-                .with_context(|| format!("--dir {host}"))?;
-        }
+    for (host, guest) in &ro.dirs {
+        wasi.preopened_dir(host, guest, FsPerms::ReadWrite).with_context(|| format!("--dir {host}"))?;
     }
-    let host = Host { cb, wasi: wasi.build(), table: ResourceTable::new() };
+    if ro.network {
+        wasi.inherit_network().allow_ip_name_lookup(true);
+    }
+    // Processes the app starts (latha:proc) run in their own engine: big
+    // stacks on their own threads, which this (the GUI's) thread has not.
+    let rt = procs::Runtime::new(ro)?;
+    let wake: Box<dyn Fn() + Send + Sync> = match cb.wake {
+        Some(w) => {
+            let u = WakeUser(cb.user, w);
+            Box::new(move || u.call())
+        }
+        None => Box::new(|| {}),
+    };
+    let proc = procs::ProcState::for_app(rt, path.to_path_buf(), wake);
+    let host = Host { cb, wasi: wasi.build(), table: ResourceTable::new(), proc };
     let mut store = Store::new(&engine, host);
     let bindings = GuiPty::instantiate(&mut store, &component, &linker)?;
     Ok(LathaApp {
@@ -405,6 +471,75 @@ fn load(path: &Path, opts: Option<&LathaOptions>, cb: LathaCallbacks, args: &[St
         has_pty,
         scratch: Vec::new(),
     })
+}
+
+/// What `path` is: 0 not wasm (or unreadable), 1 a core module, 2 a
+/// component that is a WASI command (exports wasi:cli/run, not latha:gui/app),
+/// 3 another component (a latha:gui app).
+#[no_mangle]
+pub unsafe extern "C" fn latha_wasm_kind(path: *const c_char) -> c_int {
+    let Ok(p) = CStr::from_ptr(path).to_str() else { return 0 };
+    let Ok(bytes) = std::fs::read(p) else { return 0 };
+    match procs::wasm_kind(&bytes) {
+        None => 0,
+        Some(procs::WasmKind::Core) => 1,
+        Some(procs::WasmKind::Component) => {
+            // Exports are in the component's type; parse without compiling.
+            let mut run = false;
+            let mut gui = false;
+            for payload in wasmparser::Parser::new(0).parse_all(&bytes) {
+                let Ok(payload) = payload else { break };
+                if let wasmparser::Payload::ComponentExportSection(s) = payload {
+                    for e in s.into_iter().flatten() {
+                        let n = e.name.name;
+                        run |= n.starts_with("wasi:cli/run");
+                        gui |= n.starts_with("latha:gui/app");
+                    }
+                }
+            }
+            if run && !gui {
+                2
+            } else {
+                3
+            }
+        }
+    }
+}
+
+/// Run a WASI command (core module with preview 1, or a command component)
+/// to its end, headless, on its own thread with a big stack, and return its
+/// exit code; it can start more processes through latha:proc. `args`: its
+/// arguments, its name first. -1 with a message in `*err` if it could not
+/// start.
+#[no_mangle]
+pub unsafe extern "C" fn latha_run(
+    path: *const c_char,
+    opts: *const LathaOptions,
+    args: *const LathaStr,
+    nargs: usize,
+    err: *mut *mut c_char,
+) -> c_int {
+    let Ok(p) = CStr::from_ptr(path).to_str() else {
+        set_err(err, "path is not UTF-8");
+        return -1;
+    };
+    let a: Vec<String> = (0..nargs).map(|i| str_of(&*args.add(i)).to_string()).collect();
+    match run(Path::new(p), opts.as_ref(), a) {
+        Ok(code) => code,
+        Err(e) => {
+            set_err(err, &format!("{e:?}"));
+            -1
+        }
+    }
+}
+
+/// latha_run for Rust callers (the latha-run binary).
+pub fn run(path: &Path, opts: Option<&LathaOptions>, args: Vec<String>) -> Result<i32> {
+    run_with(path, run_options(opts), args)
+}
+
+pub fn run_with(path: &Path, ro: procs::RunOptions, args: Vec<String>) -> Result<i32> {
+    procs::Runtime::new(ro)?.run_main(path, args)
 }
 
 unsafe fn str_of(s: &LathaStr) -> &str {

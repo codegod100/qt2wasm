@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build latha-gui: the wasmtime host (host/, cargo) then the Qt window (CMake).
-# Output: latha-gui/build/latha-gui. Run in the pixi `latha` env
+# Output: latha-gui/build/latha-gui (and latha-run, the same host without Qt). Run in the pixi `latha` env
 # (pixi run -e latha latha-build), which brings Qt 6, Rust and CMake.
 #   LATHA_GUI_BUILD_TYPE=Debug   a debug build of both halves
 set -euo pipefail
@@ -27,4 +27,5 @@ cmake -S "$here" -B "$build/qt" "${gen[@]}" -DCMAKE_BUILD_TYPE="$type" -DLATHA_H
     ${CMAKE_PREFIX_PATH:+-DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH"} >/dev/null
 cmake --build "$build/qt"
 cp "$build/qt/latha-gui" "$build/latha-gui"
+cp "$CARGO_TARGET_DIR/$outdir/latha-run" "$build/latha-run"
 echo "built $build/latha-gui"
