@@ -6,6 +6,7 @@
 #include <QKeyEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPalette>
 #include <QStyleHints>
 #include <QTime>
 #include <QWheelEvent>
@@ -50,9 +51,11 @@ void Sketch::paintEvent(QPaintEvent *) {
     // Clock, top right
     const qreal r = 54;
     const QPointF c(width() - r - 16, r + 16);
-    p.setPen(QPen(fg, 2));
+    // The rim in the desktop's accent color (host.accent-color via the palette).
+    p.setPen(QPen(QGuiApplication::palette().color(QPalette::Accent), 3));
     p.setBrush(Qt::NoBrush);
     p.drawEllipse(c, r, r);
+    p.setPen(QPen(fg, 2));
     for (int i = 0; i < 12; ++i) {
         const qreal a = i * M_PI / 6;
         p.drawLine(c + QPointF(std::sin(a), -std::cos(a)) * (r - 8), c + QPointF(std::sin(a), -std::cos(a)) * (r - 2));

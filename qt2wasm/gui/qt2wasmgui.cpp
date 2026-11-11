@@ -7,7 +7,7 @@
 //     window, raster backing stores, a compositor that stacks the visible
 //     top-level windows (the first normal one fills the screen; popups and
 //     tool tips float at their positions) into one frame, the clipboard,
-//     cursors and the color scheme through host calls;
+//     cursors, the color scheme and accent color through host calls;
 //   - the app exports: start() runs the program's qt2wasm_gui_main(), the
 //     input exports become QWindowSystemInterface events, paint() composes
 //     the damaged parts of the frame and frame-pixels() hands them out.
@@ -42,6 +42,7 @@ using gui_list_string_t = gui_pty_list_string_t;
 #include <QInputMethodEvent>
 #include <QMimeData>
 #include <QPainter>
+#include <QPalette>
 #include <QPointer>
 #include <QScreen>
 #include <QWindow>
@@ -116,6 +117,8 @@ struct State {
     QSize device{800, 600};  // the host surface, device pixels
     qreal scale = 1.0;
     bool dark = false;
+    bool hasAccent = false;  // the desktop has an accent color (host.accent-color)
+    QRgb accent = 0;
     bool resized = false;    // resize() was called at least once
     GuiScreen *screen = nullptr;
     QList<GuiWindow *> stack;  // visible top-levels, bottom to top
@@ -506,9 +509,39 @@ public:
 };
 #endif
 
+// Ask the host for the desktop's accent color; true if it changed.
+bool readAccent() {
+    uint32_t rgb = 0;
+    const bool has = latha_gui_host_accent_color(&rgb);
+    const QRgb accent = has ? qRgb((rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff) : 0;
+    if (has == S.hasAccent && accent == S.accent)
+        return false;
+    S.hasAccent = has;
+    S.accent = accent;
+    return true;
+}
+
 class GuiTheme : public QPlatformTheme {
 public:
     Qt::ColorScheme colorScheme() const override { return S.dark ? Qt::ColorScheme::Dark : Qt::ColorScheme::Light; }
+    // Qt's default palette with the desktop's accent as Accent and Highlight
+    // (selection), so QGuiApplication::palette() follows the desktop.
+    const QPalette *palette(Palette type) const override {
+        if (type != SystemPalette || !S.hasAccent)
+            return QPlatformTheme::palette(type);
+        static QPalette pal;
+        const QPalette *base = QPlatformTheme::palette(SystemPalette);
+        pal = base ? *base : QPalette();
+        const QColor accent(S.accent);
+        // Text on the accent: white unless the accent is light.
+        const QColor onAccent = qGray(S.accent) > 160 ? QColor(Qt::black) : QColor(Qt::white);
+        for (QPalette::ColorGroup g : {QPalette::Active, QPalette::Inactive}) {
+            pal.setColor(g, QPalette::Accent, accent);
+            pal.setColor(g, QPalette::Highlight, accent);
+            pal.setColor(g, QPalette::HighlightedText, onAccent);
+        }
+        return &pal;
+    }
 };
 
 class GuiIntegration : public QPlatformIntegration {
@@ -746,6 +779,7 @@ QString primaryText() { return hostText(latha_gui_host_primary_text); }
 void setPrimaryText(const QString &text) { hostSetText(latha_gui_host_set_primary_text, text); }
 
 void bell() { latha_gui_host_bell(); }
+QColor accentColor() { return S.hasAccent ? QColor(S.accent) : QColor(); }
 
 bool scrollWindow(QWindow *window, const QRect &area, int dx, int dy) {
     QPlatformWindow *pw = window ? window->handle() : nullptr;
@@ -881,6 +915,7 @@ static void (*volatile g_keepImports[])() = {
     reinterpret_cast<void (*)()>(&latha_gui_host_primary_text),
     reinterpret_cast<void (*)()>(&latha_gui_host_set_primary_text),
     reinterpret_cast<void (*)()>(&latha_gui_host_prefers_dark),
+    reinterpret_cast<void (*)()>(&latha_gui_host_accent_color),
     reinterpret_cast<void (*)()>(&latha_gui_host_bell),
     reinterpret_cast<void (*)()>(&latha_gui_host_quit),
 #ifdef QT2WASM_GUI_PTY
@@ -902,6 +937,7 @@ bool exports_latha_gui_app_start(gui_list_string_t *args, exports_latha_gui_app_
     if (argv8.isEmpty())
         argv8.append("app");
     S.dark = latha_gui_host_prefers_dark();
+    readAccent();
     GuiCall call;
     static QuitFilter quitFilter;
     qApp->installEventFilter(&quitFilter);
@@ -1057,7 +1093,8 @@ void exports_latha_gui_app_focus(bool focused) {
 
 void exports_latha_gui_app_color_scheme(bool dark) {
     GuiCall call;
-    if (dark == S.dark)
+    const bool accentChanged = readAccent();
+    if (dark == S.dark && !accentChanged)
         return;
     S.dark = dark;
     QWindowSystemInterface::handleThemeChange();

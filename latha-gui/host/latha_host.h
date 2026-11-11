@@ -26,6 +26,7 @@ typedef struct {
     void (*clipboard_text)(void *user, int selection, LathaOut *out); // 0 clipboard, 1 primary
     void (*set_clipboard_text)(void *user, int selection, LathaStr text);
     int (*prefers_dark)(void *user);
+    int (*accent_color)(void *user, uint32_t *rgb);  // 1 and *rgb = 0xRRGGBB, or 0: none
     void (*bell)(void *user);
     void (*quit)(void *user, int32_t code);
     // env: envc (name, value) pairs; cwd.ptr NULL: none. >= 0 id, -1 error in err.

@@ -8,6 +8,7 @@
 //
 //   latha-gui [options] APP.wasm [args...]
 #include "host/latha_host.h"
+#include "accent.h"
 #include "window.h"
 
 #include <QApplication>
@@ -94,6 +95,14 @@ int cbPrefersDark(void *u)
     if (theme == "dark" || theme == "light")
         return theme == "dark";
     return QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
+}
+int cbAccentColor(void *, uint32_t *rgb)
+{
+    const QColor c = Accent::instance()->color();
+    if (!c.isValid())
+        return 0;
+    *rgb = c.rgb() & 0xffffff;
+    return 1;
 }
 void cbBell(void *)
 {
@@ -292,6 +301,7 @@ int main(int argc, char **argv)
     cb.clipboard_text = cbClipboardText;
     cb.set_clipboard_text = cbSetClipboardText;
     cb.prefers_dark = cbPrefersDark;
+    cb.accent_color = cbAccentColor;
     cb.bell = cbBell;
     cb.quit = cbQuit;
     cb.pty_spawn = cbPtySpawn;

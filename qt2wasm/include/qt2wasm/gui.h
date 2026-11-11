@@ -4,7 +4,7 @@
 // as perry-gui opens a native window, sends it input and shows the frames the
 // app paints. Inside, the `qt2wasmgui` platform plugin turns that into
 // ordinary Qt: QWindow / QRasterWindow / QPainter, key, mouse and wheel
-// events, the clipboard, cursors, the dark / light color scheme, HiDPI.
+// events, the clipboard, cursors, the dark / light color scheme and accent color, HiDPI.
 //
 // Write the start-up as a function instead of main():
 //
@@ -26,6 +26,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QColor>
 #include <QList>
 #include <QRect>
 #include <QString>
@@ -45,6 +46,10 @@ QString primaryText();
 void setPrimaryText(const QString &text);
 /// Ring the host's bell.
 void bell();
+/// The desktop's accent color (host.accent-color), invalid if it has none.
+/// When it has one it is also the palette's Accent and Highlight; a change
+/// arrives as a QEvent::ThemeChange.
+QColor accentColor();
 
 /// Scroll: move the pixels inside `area` of `window`'s backing store by
 /// (dx, dy), in device pixels (the backing store image's own), and tell the

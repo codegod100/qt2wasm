@@ -62,6 +62,8 @@ pub struct LathaCallbacks {
     pub clipboard_text: extern "C" fn(*mut c_void, c_int, *mut LathaOut),
     pub set_clipboard_text: extern "C" fn(*mut c_void, c_int, LathaStr),
     pub prefers_dark: extern "C" fn(*mut c_void) -> c_int,
+    /// 1 and `*rgb` = 0xRRGGBB, or 0: the desktop has no accent color.
+    pub accent_color: extern "C" fn(*mut c_void, *mut u32) -> c_int,
     pub bell: extern "C" fn(*mut c_void),
     pub quit: extern "C" fn(*mut c_void, i32),
     /// argv / env (name, value pairs: 2 * envc strings) / cwd (ptr NULL: none).
@@ -197,6 +199,10 @@ impl latha::gui::host::Host for Host {
     }
     fn prefers_dark(&mut self) -> bool {
         (self.cb.prefers_dark)(self.cb.user) != 0
+    }
+    fn accent_color(&mut self) -> Option<u32> {
+        let mut rgb = 0u32;
+        ((self.cb.accent_color)(self.cb.user, &mut rgb) != 0).then_some(rgb & 0xff_ffff)
     }
     fn bell(&mut self) {
         (self.cb.bell)(self.cb.user)

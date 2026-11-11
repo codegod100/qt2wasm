@@ -10,7 +10,7 @@ preview = ["pixi-build"]
 
 [package]
 name = "qt2wasm"
-version = "0.10.0"
+version = "0.10.1"
 description = "Build Qt C++ into WASI WebAssembly components"
 homepage = "https://fileapi.fastapicloud.dev/forge/#nandi.uk/qt2wasm"
 

@@ -25,7 +25,7 @@
 /// Coordinates and sizes are device pixels, origin top left. Pixels cross the
 /// boundary base64 encoded in a string: hosts lift a `list<u8>` element by
 /// element, a string in one copy.
-package latha:gui@0.2.0;
+package latha:gui@0.2.1;
 
 interface types {
     /// A rectangle in device pixels.
@@ -183,6 +183,10 @@ interface host {
     set-primary-text: func(text: string);
     /// Whether the desktop prefers a dark color scheme.
     prefers-dark: func() -> bool;
+    /// The desktop's accent color (selection, focus, active tab) as
+    /// 0xRRGGBB, none if the desktop has none. Since 0.2.1; a change arrives
+    /// as `app.color-scheme`.
+    accent-color: func() -> option<u32>;
     bell: func();
     /// Leave: the host closes the window and exits with `code`.
     quit: func(code: s32);
@@ -206,7 +210,9 @@ interface app {
     pointer: func(event: pointer-event);
     wheel: func(event: wheel-event);
     focus: func(focused: bool);
-    /// The dark / light preference changed (see `host.prefers-dark`).
+    /// The desktop's appearance changed: the dark / light preference (see
+    /// `host.prefers-dark`) or the accent color (`host.accent-color`, read it
+    /// again).
     color-scheme: func(dark: bool);
     /// The user asked to close the window: true lets the host close it.
     close: func() -> bool;

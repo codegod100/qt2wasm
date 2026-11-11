@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Kwi WebAssembly port contributors
 // SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only
+#include "accent.h"
 #include "window.h"
 
 #include <QApplication>
@@ -178,6 +179,11 @@ AppWindow::AppWindow(LathaApp *app, const QString &appName, const RunOptions &op
     }
     connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this, [this] {
         if (!m_darkOverride && m_app && check(latha_color_scheme(m_app, prefersDark())))
+            schedulePump();
+    });
+    // color-scheme also tells the app to read host.accent-color again.
+    connect(Accent::instance(), &Accent::changed, this, [this] {
+        if (m_app && check(latha_color_scheme(m_app, prefersDark())))
             schedulePump();
     });
 

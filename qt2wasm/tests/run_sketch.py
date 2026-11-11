@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from wasmtime import Engine, Store, WasiConfig
 from wasmtime.component import Component, Linker
 
-V = "0.2.0"
+V = "0.2.1"
 HOST, APP = f"latha:gui/host@{V}", f"latha:gui/app@{V}"
 
 
@@ -40,6 +40,7 @@ def main(path: str) -> int:
         "primary-text": lambda _s: "",
         "set-primary-text": lambda _s, t: None,
         "prefers-dark": lambda _s: True,
+        "accent-color": lambda _s: 0xE91E63,
         "bell": lambda _s: None,
         "quit": lambda _s, code: log.append(("quit", code)),
     }
