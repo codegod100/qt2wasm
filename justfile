@@ -83,7 +83,7 @@ build-all:
 
 # --- installing onto your system ---------------------------------------------
 
-# Install a prebuilt nandi-testing package (pixi global) and link its programs into /usr/bin (sudo) plus its desktop entry if the checkout has one, e.g. `just install latha-gui`; rerun to update
+# Install a prebuilt nandi-testing package (pixi global) and link its programs into /usr/bin (sudo) plus its icon and desktop entry if the checkout has them, e.g. `just install latha-gui`; rerun to update
 install pkg:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -103,6 +103,20 @@ install pkg:
         sudo ln -sfn "$bin/$exe" "/usr/bin/$exe"
         echo "/usr/bin/$exe -> $bin/$exe"
     done
+    # Its icon (e.g. latha-gui/icons/latha-gui.svg + latha-gui-N.png), for the
+    # desktop entry, its windows and (latha-gui) .wasm files.
+    icons="{{root}}/{{pkg}}/icons"
+    if [ -e "$icons/{{pkg}}.svg" ]; then
+        hicolor=/usr/share/icons/hicolor
+        sudo install -Dm644 "$icons/{{pkg}}.svg" "$hicolor/scalable/apps/{{pkg}}.svg"
+        for png in "$icons/{{pkg}}"-*.png; do
+            [ -e "$png" ] || continue
+            n=$(basename "$png" .png); n=${n##*-}
+            sudo install -Dm644 "$png" "$hicolor/${n}x${n}/apps/{{pkg}}.png"
+        done
+        echo "installed the {{pkg}} icon into $hicolor"
+        command -v gtk-update-icon-cache >/dev/null && sudo gtk-update-icon-cache -qtf "$hicolor" || true
+    fi
     # A desktop entry in the checkout (e.g. latha-gui/latha-gui.desktop) makes the
     # program a file handler: it shows up in Open With, and becomes the default for
     # its MIME types unless you already picked one.

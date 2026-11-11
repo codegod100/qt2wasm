@@ -1,0 +1,8 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource prefix="/latha-gui">
+  <file>latha-gui-16.png</file>
+  <file>latha-gui-32.png</file>
+  <file>latha-gui-48.png</file>
+  <file>latha-gui-256.png</file>
+</qresource>
+</RCC>

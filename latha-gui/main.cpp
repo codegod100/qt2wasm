@@ -9,12 +9,14 @@
 //   latha-gui [options] APP.wasm [args...]
 #include "host/latha_host.h"
 #include "accent.h"
+#include "appmeta.h"
 #include "window.h"
 
 #include <QApplication>
 #include <QClipboard>
 #include <QElapsedTimer>
 #include <QFileInfo>
+#include <QImage>
 #include <QStyleHints>
 #include <cstdio>
 #include <cstring>
@@ -187,6 +189,7 @@ void usage(FILE *f)
             "  --type-after MS       when to type (default 500)\n"
             "  --debug               paint timings on stderr (LATHA_GUI_DEBUG=1)\n"
             "  --verify              check every scroll move against a full copy (LATHA_GUI_VERIFY=1)\n"
+            "  --app-info            print the app's id, name and icons (latha:app, latha:icon) and exit\n"
             "environment: LATHA_GUI_THEME=dark|light, LATHA_GUI_CACHE=0, LATHA_GUI_CACHE_DIR\n");
 }
 
@@ -202,6 +205,7 @@ int main(int argc, char **argv)
     QSize size;
     bool noCache = false;
     bool noRoot = false;
+    bool appInfo = false;
     int i = 1;
     for (; i < argc; ++i) {
         const char *a = argv[i];
@@ -241,6 +245,8 @@ int main(int argc, char **argv)
             opts.debug = true;
         } else if (!strcmp(a, "--verify")) {
             opts.verify = true;
+        } else if (!strcmp(a, "--app-info")) {
+            appInfo = true;
         } else if (!strcmp(a, "--")) {
             ++i;
             break;
@@ -271,10 +277,38 @@ int main(int argc, char **argv)
             size = QSize(p[0].toInt(), p[1].toInt());
     }
 
-    QApplication::setApplicationName(QStringLiteral("latha-gui"));
-    QApplication::setDesktopFileName(QStringLiteral("latha-gui"));
+    // The app's own id, name and icon (custom sections, appmeta.h): its id is
+    // the Wayland app id / WM_CLASS, so the desktop groups and labels it as
+    // itself (and uses id.desktop when there is one); without one it is a
+    // latha-gui window.
+    const AppMeta meta = readAppMeta(QString::fromLocal8Bit(wasmPath));
+    const QString appId = meta.id.isEmpty() ? QStringLiteral("latha-gui") : meta.id;
+    QApplication::setApplicationName(appId);
+    QApplication::setDesktopFileName(appId);
+    if (appInfo) {
+        if (!meta.valid) {
+            fprintf(stderr, "latha-gui: %s: not a wasm file\n", wasmPath.constData());
+            return 2;
+        }
+        QCoreApplication core(argc, argv); // for QImage format plugins (SVG)
+        printf("id: %s\nname: %s\nicons: %lld\n", qPrintable(meta.id), qPrintable(meta.name),
+               (long long)meta.icons.size());
+        for (const QByteArray &b : meta.icons) {
+            const QImage img = QImage::fromData(b);
+            if (img.isNull())
+                printf("  %lld bytes, not an image Qt reads\n", (long long)b.size());
+            else
+                printf("  %dx%d (%lld bytes)\n", img.width(), img.height(), (long long)b.size());
+        }
+        return 0;
+    }
     QApplication qapp(argc, argv);
+    // Before any window: it is part of the toplevel (xdg-toplevel-icon on
+    // Wayland, _NET_WM_ICON on X11).
+    const QIcon appIcon = meta.icon();
+    QApplication::setWindowIcon(appIcon.isNull() ? lathaGuiIcon() : appIcon);
 
+    // argv[0] stays the file name; latha:app's name is the first window title.
     QString appName = QFileInfo(QString::fromLocal8Bit(wasmPath)).fileName();
     if (appName.endsWith(QLatin1String(".wasm")))
         appName.chop(5);
@@ -324,7 +358,7 @@ int main(int argc, char **argv)
     const qint64 loadMs = t.elapsed();
     // The window exists (hidden) before start: the app may spawn ptys or set
     // its title from start.
-    AppWindow window(app, appName, opts);
+    AppWindow window(app, meta.name.isEmpty() ? appName : meta.name, opts);
     g_window = &window;
     uint32_t ww = 0, wh = 0;
     const int r = latha_start(app, args.data(), args.size(), &ww, &wh, &err);

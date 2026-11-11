@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- application/wasm, for systems whose shared-mime-info predates it. -->
+<!-- application/wasm, for systems whose shared-mime-info predates it, and
+     latha-gui's icon for .wasm files in file managers. -->
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
   <mime-type type="application/wasm">
     <comment>WebAssembly module</comment>
+    <icon name="latha-gui"/>
     <magic priority="50">
       <match type="string" value="\0asm" offset="0"/>
     </magic>

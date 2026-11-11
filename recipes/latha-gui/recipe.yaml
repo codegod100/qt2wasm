@@ -6,7 +6,7 @@
 #
 #   rattler-build build -r recipes/latha-gui -c conda-forge -c https://prefix.dev/nandi-testing
 context:
-  version: "0.2.1"
+  version: "0.2.2"
 
 package:
   name: latha-gui
@@ -30,6 +30,8 @@ build:
     - install -Dm755 latha-gui/build/latha-gui $PREFIX/bin/latha-gui
     - install -Dm644 qt2wasm/gui/wit/gui.wit $PREFIX/share/latha-gui/gui.wit
     - install -Dm644 latha-gui/README.md $PREFIX/share/latha-gui/README.md
+    - install -Dm644 latha-gui/icons/latha-gui.svg $PREFIX/share/icons/hicolor/scalable/apps/latha-gui.svg
+    - install -Dm644 latha-gui/latha-gui.desktop $PREFIX/share/applications/latha-gui.desktop
 
 requirements:
   build:
@@ -49,6 +51,7 @@ tests:
   - script:
       - latha-gui --help
       - test -f $PREFIX/share/latha-gui/gui.wit
+      - test -f $PREFIX/share/icons/hicolor/scalable/apps/latha-gui.svg
 
 about:
   homepage: https://fileapi.fastapicloud.dev/forge/#nandi.uk/qt2wasm
