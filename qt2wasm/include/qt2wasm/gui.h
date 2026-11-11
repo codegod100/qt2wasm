@@ -30,6 +30,7 @@
 #include <QList>
 #include <QRect>
 #include <QString>
+#include <QUrl>
 #include <QStringList>
 #include <functional>
 #include <utility>
@@ -46,6 +47,10 @@ QString primaryText();
 void setPrimaryText(const QString &text);
 /// Ring the host's bell.
 void bell();
+/// Open `url` the desktop's way (browser, mail client, file manager) with
+/// host.open-url (latha:gui 0.2.2); false if the host would not.
+/// QDesktopServices::openUrl comes here too.
+bool openUrl(const QUrl &url);
 /// The desktop's accent color (host.accent-color), invalid if it has none.
 /// When it has one it is also the palette's Accent and Highlight; a change
 /// arrives as a QEvent::ThemeChange.

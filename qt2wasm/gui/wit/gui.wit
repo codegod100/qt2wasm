@@ -25,7 +25,7 @@
 /// Coordinates and sizes are device pixels, origin top left. Pixels cross the
 /// boundary base64 encoded in a string: hosts lift a `list<u8>` element by
 /// element, a string in one copy.
-package latha:gui@0.2.1;
+package latha:gui@0.2.2;
 
 interface types {
     /// A rectangle in device pixels.
@@ -188,6 +188,10 @@ interface host {
     /// as `app.color-scheme`.
     accent-color: func() -> option<u32>;
     bell: func();
+    /// Open `url` (http, https, mailto, file, ...) the desktop's way: in
+    /// the user's browser, mail client, file manager. False if the host
+    /// cannot or will not. Since 0.2.2.
+    open-url: func(url: string) -> bool;
     /// Leave: the host closes the window and exits with `code`.
     quit: func(code: s32);
 }

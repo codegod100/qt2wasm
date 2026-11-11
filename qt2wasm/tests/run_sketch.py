@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from wasmtime import Engine, Store, WasiConfig
 from wasmtime.component import Component, Linker
 
-V = "0.2.1"
+V = "0.2.2"
 HOST, APP = f"latha:gui/host@{V}", f"latha:gui/app@{V}"
 
 
@@ -42,6 +42,7 @@ def main(path: str) -> int:
         "prefers-dark": lambda _s: True,
         "accent-color": lambda _s: 0xE91E63,
         "bell": lambda _s: None,
+        "open-url": lambda _s, url: log.append(("open-url", url)) or True,
         "quit": lambda _s, code: log.append(("quit", code)),
     }
     with linker.root() as root, root.add_instance(HOST) as inst:

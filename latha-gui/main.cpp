@@ -13,6 +13,9 @@
 #include "window.h"
 
 #include <QApplication>
+#include <QDesktopServices>
+#include <QProcess>
+#include <QUrl>
 #include <QClipboard>
 #include <QElapsedTimer>
 #include <QFileInfo>
@@ -109,6 +112,24 @@ int cbAccentColor(void *, uint32_t *rgb)
 void cbBell(void *)
 {
     QApplication::beep();
+}
+// host.open-url: $LATHA_GUI_OPEN_URL (a command; the URL is its last
+// argument) if set, else the desktop's way (QDesktopServices: the XDG portal
+// in a sandbox, else xdg-open / the desktop's opener).
+int cbOpenUrl(void *, LathaStr u)
+{
+    const QUrl url(qstr(u), QUrl::StrictMode);
+    if (!url.isValid() || url.scheme().isEmpty())
+        return 0;
+    const QString cmd = qEnvironmentVariable("LATHA_GUI_OPEN_URL");
+    if (!cmd.isEmpty()) {
+        QStringList args = QProcess::splitCommand(cmd);
+        if (args.isEmpty())
+            return 0;
+        const QString program = args.takeFirst();
+        return QProcess::startDetached(program, args << url.toString(QUrl::FullyEncoded)) ? 1 : 0;
+    }
+    return QDesktopServices::openUrl(url) ? 1 : 0;
 }
 void cbQuit(void *u, int32_t code)
 {
@@ -346,6 +367,7 @@ int main(int argc, char **argv)
     cb.prefers_dark = cbPrefersDark;
     cb.accent_color = cbAccentColor;
     cb.bell = cbBell;
+    cb.open_url = cbOpenUrl;
     cb.quit = cbQuit;
     cb.pty_spawn = cbPtySpawn;
     cb.pty_write = cbPtyWrite;

@@ -45,6 +45,7 @@ using gui_list_string_t = gui_pty_list_string_t;
 #include <QPalette>
 #include <QPointer>
 #include <QScreen>
+#include <QUrl>
 #include <QWindow>
 #include <QtPlugin>
 #include <qpa/qplatformbackingstore.h>
@@ -52,6 +53,7 @@ using gui_list_string_t = gui_pty_list_string_t;
 #include <qpa/qplatformcursor.h>
 #include <qpa/qplatformintegration.h>
 #include <qpa/qplatformscreen.h>
+#include <qpa/qplatformservices.h>
 #include <qpa/qplatformtheme.h>
 #include <qpa/qplatformwindow.h>
 #include <qpa/qwindowsysteminterface.h>
@@ -544,6 +546,13 @@ public:
     }
 };
 
+// QDesktopServices::openUrl -> host.open-url.
+class GuiServices : public QPlatformServices {
+public:
+    bool openUrl(const QUrl &url) override { return qt2wasm::gui::openUrl(url); }
+    bool openDocument(const QUrl &url) override { return qt2wasm::gui::openUrl(url); }
+};
+
 class GuiIntegration : public QPlatformIntegration {
 public:
     GuiIntegration() { QWindowSystemInterface::setSynchronousWindowSystemEvents(true); }
@@ -580,12 +589,14 @@ public:
     QStringList themeNames() const override { return {QStringLiteral("qt2wasmgui")}; }
     QPlatformTheme *createPlatformTheme(const QString &) const override { return new GuiTheme; }
     void beep() const override { latha_gui_host_bell(); }
+    QPlatformServices *services() const override { return &m_services; }
     void quit() const override { S.quitRequested = true; }
 
     mutable QFreeTypeFontDatabase m_fonts;
 #if QT_CONFIG(clipboard)
     mutable GuiClipboard m_clipboard;
 #endif
+    mutable GuiServices m_services;
 };
 
 // Quit events (QGuiApplication::quit(), the last window closing) end the app:
@@ -779,6 +790,13 @@ QString primaryText() { return hostText(latha_gui_host_primary_text); }
 void setPrimaryText(const QString &text) { hostSetText(latha_gui_host_set_primary_text, text); }
 
 void bell() { latha_gui_host_bell(); }
+bool openUrl(const QUrl &url) {
+    if (!url.isValid())
+        return false;
+    QByteArray b = url.toEncoded();
+    gui_string_t s{reinterpret_cast<uint8_t *>(b.data()), size_t(b.size())};
+    return latha_gui_host_open_url(&s);
+}
 QColor accentColor() { return S.hasAccent ? QColor(S.accent) : QColor(); }
 
 bool scrollWindow(QWindow *window, const QRect &area, int dx, int dy) {
@@ -917,6 +935,7 @@ static void (*volatile g_keepImports[])() = {
     reinterpret_cast<void (*)()>(&latha_gui_host_prefers_dark),
     reinterpret_cast<void (*)()>(&latha_gui_host_accent_color),
     reinterpret_cast<void (*)()>(&latha_gui_host_bell),
+    reinterpret_cast<void (*)()>(&latha_gui_host_open_url),
     reinterpret_cast<void (*)()>(&latha_gui_host_quit),
 #ifdef QT2WASM_GUI_PTY
     reinterpret_cast<void (*)()>(&latha_gui_pty_spawn),

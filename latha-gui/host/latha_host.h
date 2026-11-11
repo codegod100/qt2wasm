@@ -28,6 +28,7 @@ typedef struct {
     int (*prefers_dark)(void *user);
     int (*accent_color)(void *user, uint32_t *rgb);  // 1 and *rgb = 0xRRGGBB, or 0: none
     void (*bell)(void *user);
+    int (*open_url)(void *user, LathaStr url);  // 1: opened (handed to the desktop), 0: not
     void (*quit)(void *user, int32_t code);
     // env: envc (name, value) pairs; cwd.ptr NULL: none. >= 0 id, -1 error in err.
     int64_t (*pty_spawn)(void *user, const LathaStr *argv, size_t argc, const LathaStr *env, size_t envc,

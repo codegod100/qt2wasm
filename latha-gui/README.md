@@ -100,7 +100,10 @@ followed live), `LATHA_GUI_ACCENT=#rrggbb|none` (else the desktop's accent
 color for `host.accent-color`: the XDG portal's `org.freedesktop.appearance
 accent-color`, then KDE's `kdeglobals` AccentColor / selection color, both
 followed live; our own Qt cannot load KDE's platform theme, so QPalette does
-not know it), `LATHA_GUI_WINDOW_SIZE=WxH`, `LATHA_GUI_CACHE=0`,
+not know it), `LATHA_GUI_OPEN_URL=COMMAND` (runs COMMAND URL for
+`host.open-url`, e.g. a particular browser; else QDesktopServices: the XDG
+portal in a sandbox, otherwise xdg-open / the desktop's opener),
+`LATHA_GUI_WINDOW_SIZE=WxH`, `LATHA_GUI_CACHE=0`,
 `LATHA_GUI_CACHE_DIR`. The app gets our environment minus `QT_*` / `QML*`
 (those are for this window's Qt, not the app's). Programs on a pty get our
 environment plus what the app passes, `TERM=xterm-256color` unless it sets

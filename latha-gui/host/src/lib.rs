@@ -65,6 +65,8 @@ pub struct LathaCallbacks {
     /// 1 and `*rgb` = 0xRRGGBB, or 0: the desktop has no accent color.
     pub accent_color: extern "C" fn(*mut c_void, *mut u32) -> c_int,
     pub bell: extern "C" fn(*mut c_void),
+    /// 1: the URL went to the desktop (browser, mail client, ...), 0: not.
+    pub open_url: extern "C" fn(*mut c_void, LathaStr) -> c_int,
     pub quit: extern "C" fn(*mut c_void, i32),
     /// argv / env (name, value pairs: 2 * envc strings) / cwd (ptr NULL: none).
     /// Returns the pty id (>= 0), or -1 with the message in `err`.
@@ -206,6 +208,9 @@ impl latha::gui::host::Host for Host {
     }
     fn bell(&mut self) {
         (self.cb.bell)(self.cb.user)
+    }
+    fn open_url(&mut self, url: String) -> bool {
+        (self.cb.open_url)(self.cb.user, LathaStr::of(&url)) != 0
     }
     fn quit(&mut self, code: i32) {
         (self.cb.quit)(self.cb.user, code)
@@ -484,10 +489,10 @@ fn buttons(bits: u32) -> wt::Buttons {
 // --- C API -----------------------------------------------------------------------------
 
 /// Our latha:gui version (gui.wit's `package` line).
-const GUI_VERSION: &str = "0.2.1";
+const GUI_VERSION: &str = "0.2.2";
 
 /// Version skew: an app built against a newer latha:gui 0.2.x imports
-/// `latha:gui/host@0.2.N` (or pty), which wasmtime resolves to our 0.2.1
+/// `latha:gui/host@0.2.N` (or pty), which wasmtime resolves to our 0.2.x
 /// instance by semver, but it may call functions we do not have yet. Add those
 /// to our instance as functions that trap when called, so the app still loads
 /// and works unless it uses one. (Not `define_unknown_imports_as_traps`: that
