@@ -9,7 +9,8 @@ git -C "$src" checkout -q FETCH_HEAD
 # Load-time patch: parallel Cranelift compilation, an on-disk compiled-code
 # cache ($XDG_CACHE_HOME/perry-component-host; PERRY_COMPONENT_CACHE=0 turns it
 # off, PERRY_COMPONENT_CACHE_DIR moves it) and one compile per load instead of
-# two when the task-exit rewrite applies.
+# two when the task-exit rewrite applies. Also: Options.fuel == 0 turns fuel
+# metering off (consume_fuel(false); refills become no-ops).
 git -C "$src" apply "$RECIPE_DIR/load-speed.patch"
 
 export RUSTUP_HOME=$SRC_DIR/.rustup CARGO_HOME=${CARGO_HOME_CACHE:-$SRC_DIR/.cargo}

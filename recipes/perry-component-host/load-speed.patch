@@ -54,6 +54,19 @@ index a2ff9525..cee6e112 100644
              control: Some(control),
              readers,
              schemas,
+diff --git a/crates/perry-component-host/src/asynchronous.rs b/crates/perry-component-host/src/asynchronous.rs
+index 9ecee3a8..94a5689f 100644
+--- a/crates/perry-component-host/src/asynchronous.rs
++++ b/crates/perry-component-host/src/asynchronous.rs
+@@ -192,7 +192,7 @@ impl Host {
+         };
+         let outcome = {
+             let live = invocation.live.as_mut().unwrap();
+-            live.store.set_fuel(live.fuel)?;
++            crate::refuel(&mut live.store, live.fuel)?;
+             live.store.set_epoch_deadline(1);
+             let mut results = vec![Val::Bool(false); ty.results().len()];
+             dispatch::drive(
 diff --git a/crates/perry-component-host/src/code_cache.rs b/crates/perry-component-host/src/code_cache.rs
 new file mode 100644
 index 00000000..e85fab6d
@@ -168,8 +181,99 @@ index 912a7d3c..210d6df4 100644
          // CommandPre checks names, but generated function type checks happen only
          // after instantiation. Validate the signature before an initializer exits.
          let profile = validate_command(&engine, &component)
+diff --git a/crates/perry-component-host/src/driver.rs b/crates/perry-component-host/src/driver.rs
+index fb317b6f..b8f7cb52 100644
+--- a/crates/perry-component-host/src/driver.rs
++++ b/crates/perry-component-host/src/driver.rs
+@@ -207,7 +207,7 @@ async fn execute(
+         lowering.commit()?;
+         let borrows = store.data_mut().borrowed.acquire(borrowed);
+         if reset_budget {
+-            store.as_context_mut().set_fuel(fuel)?;
++            crate::refuel(&mut store, fuel)?;
+             store.as_context_mut().set_epoch_deadline(1);
+         }
+         let result_count = ty.results().len();
+diff --git a/crates/perry-component-host/src/driver/async_values.rs b/crates/perry-component-host/src/driver/async_values.rs
+index 718f4c97..d3a6526b 100644
+--- a/crates/perry-component-host/src/driver/async_values.rs
++++ b/crates/perry-component-host/src/driver/async_values.rs
+@@ -68,7 +68,7 @@ pub(super) async fn execute(
+     let result = origin::scoped(Some(command.origin), async {
+         if reset {
+             accessor.with(|mut store| {
+-                store.as_context_mut().set_fuel(fuel)?;
++                crate::refuel(&mut store, fuel)?;
+                 store.as_context_mut().set_epoch_deadline(1);
+                 Ok::<_, wasmtime::Error>(())
+             })?;
+diff --git a/crates/perry-component-host/src/driver/http.rs b/crates/perry-component-host/src/driver/http.rs
+index 5f738183..141b966c 100644
+--- a/crates/perry-component-host/src/driver/http.rs
++++ b/crates/perry-component-host/src/driver/http.rs
+@@ -154,7 +154,7 @@ pub(super) async fn execute(
+             .map_err(anyhow::Error::from)
+             .context("invalid P3 HTTP handler signature")?;
+         if reset {
+-            store.as_context_mut().set_fuel(fuel)?;
++            crate::refuel(&mut store, fuel)?;
+             store.as_context_mut().set_epoch_deadline(1);
+         }
+         Ok(typed)
+diff --git a/crates/perry-component-host/src/driver/resources.rs b/crates/perry-component-host/src/driver/resources.rs
+index 70799c82..0af1d09d 100644
+--- a/crates/perry-component-host/src/driver/resources.rs
++++ b/crates/perry-component-host/src/driver/resources.rs
+@@ -79,7 +79,7 @@ pub(super) async fn execute(
+                     data.resources.remove(token)?;
+                 }
+                 if reset {
+-                    store.as_context_mut().set_fuel(fuel)?;
++                    crate::refuel(&mut store, fuel)?;
+                     store.as_context_mut().set_epoch_deadline(1);
+                 }
+                 Ok(Ok(Some((function, resource))))
+diff --git a/crates/perry-component-host/src/driver/writers.rs b/crates/perry-component-host/src/driver/writers.rs
+index d34a7107..912f7ad0 100644
+--- a/crates/perry-component-host/src/driver/writers.rs
++++ b/crates/perry-component-host/src/driver/writers.rs
+@@ -30,7 +30,7 @@ pub(super) async fn execute(
+     let mut closed_write = false;
+     let result=origin::scoped(Some(command.origin),async {
+         if reset {accessor.with(|mut store|{
+-            store.as_context_mut().set_fuel(fuel)?;store.as_context_mut().set_epoch_deadline(1);Ok::<_,wasmtime::Error>(())
++            crate::refuel(&mut store, fuel)?;store.as_context_mut().set_epoch_deadline(1);Ok::<_,wasmtime::Error>(())
+         })?;}
+         if let Target::Factory(ty)=&command.target {
+             let (index,adapter)=accessor.with(|mut store|store.data_mut().async_values.reserve_factory(ty))?;
+diff --git a/crates/perry-component-host/src/http.rs b/crates/perry-component-host/src/http.rs
+index 6589ed95..3bfa8240 100644
+--- a/crates/perry-component-host/src/http.rs
++++ b/crates/perry-component-host/src/http.rs
+@@ -59,7 +59,7 @@ impl Host {
+             ), ()>(&live.store)
+             .map_err(anyhow::Error::from)
+             .context("invalid HTTP incoming-handler signature")?;
+-        live.store.set_fuel(live.fuel)?;
++        crate::refuel(&mut live.store, live.fuel)?;
+         live.store.set_epoch_deadline(1);
+         request.headers.set_immutable();
+         let (request, response, observer) = {
+diff --git a/crates/perry-component-host/src/http/p3.rs b/crates/perry-component-host/src/http/p3.rs
+index 9c698b5a..4225f282 100644
+--- a/crates/perry-component-host/src/http/p3.rs
++++ b/crates/perry-component-host/src/http/p3.rs
+@@ -97,7 +97,7 @@ impl Host {
+         let guest_error = RefCell::new(None);
+         let outcome = {
+             let live = invocation.live.as_mut().unwrap();
+-            live.store.set_fuel(live.fuel)?;
++            crate::refuel(&mut live.store, live.fuel)?;
+             live.store.set_epoch_deadline(1);
+             let running = dispatch::drive(
+                 dispatcher.as_ref(),
 diff --git a/crates/perry-component-host/src/lib.rs b/crates/perry-component-host/src/lib.rs
-index e396e382..4555a96c 100644
+index e396e382..e8b3e26b 100644
 --- a/crates/perry-component-host/src/lib.rs
 +++ b/crates/perry-component-host/src/lib.rs
 @@ -10,6 +10,7 @@ mod imports;
@@ -189,7 +293,51 @@ index e396e382..4555a96c 100644
  use wasmtime::{AsContextMut, Config, Engine, Store};
  
  pub type Import = Arc<dyn Fn(&[Value]) -> Result<Option<Value>> + Send + Sync>;
-@@ -214,17 +215,12 @@ impl Host {
+@@ -45,7 +46,10 @@ pub type Imports = BTreeMap<String, BTreeMap<String, Import>>;
+ pub struct Options {
+     /// Maximum total size of guest linear memories, in bytes.
+     pub memory_bytes: usize,
+-    /// Fuel for initialization and each exported call/destructor.
++    /// Fuel for initialization and each exported call/destructor. 0 turns
++    /// fuel metering off: the guest runs unmetered (no per-instruction
++    /// counting, which Cranelift otherwise emits into every basic block) and
++    /// only epoch interruption (`Interrupt`) can stop it.
+     pub fuel: u64,
+     /// Maximum core instances used by one component/composition.
+     pub instances: usize,
+@@ -91,6 +95,14 @@ pub struct Host {
+     dispatcher: Option<Arc<asynchronous::dispatch::Dispatcher>>,
+ }
+ 
++/// Refill a store's fuel budget; a no-op when metering is off (`fuel == 0`).
++pub(crate) fn refuel(mut store: impl AsContextMut, fuel: u64) -> wasmtime::Result<()> {
++    if fuel > 0 {
++        store.as_context_mut().set_fuel(fuel)?;
++    }
++    Ok(())
++}
++
+ /// Independent of the calling thread. Incrementing the epoch interrupts this
+ /// component's guest execution; another component has a different engine.
+ #[derive(Clone)]
+@@ -199,14 +211,14 @@ impl Host {
+         disposal: bool,
+     ) -> Result<Self> {
+         ensure!(
+-            options.memory_bytes > 0 && options.fuel > 0 && options.instances > 0,
++            options.memory_bytes > 0 && options.instances > 0,
+             "component limits must be positive"
+         );
+         let mut config = Config::new();
+         config
+             .wasm_component_model(true)
+             .wasm_component_model_async(true)
+-            .consume_fuel(true)
++            .consume_fuel(options.fuel > 0)
+             .epoch_interruption(true);
+         config.wasm_exceptions(true);
+         // Callback EXIT denotes task exit only for the supported stackless
+@@ -214,17 +226,12 @@ impl Host {
          config.wasm_component_model_threading(false);
          config.wasm_component_model_async_stackful(false);
          let engine = Engine::new(&config)?;
@@ -211,3 +359,74 @@ index e396e382..4555a96c 100644
          let identities = contract::validate(&engine, &component, world, options.wasi.is_some())?;
          let prepared = async_values::Prepared::new(
              &engine,
+@@ -336,7 +343,7 @@ impl Host {
+             },
+         );
+         store.limiter(|data| &mut data.limits);
+-        store.set_fuel(options.fuel)?;
++        crate::refuel(&mut store, options.fuel)?;
+         store.set_epoch_deadline(1);
+         let initialized = (|| -> Result<_> {
+             let needs_async = world
+@@ -513,7 +520,7 @@ impl Host {
+             .collect::<Result<Vec<_>>>()?;
+         lowering.commit()?;
+         let mut results = vec![Val::Bool(false); ty.results().len()];
+-        live.store.set_fuel(live.fuel)?;
++        crate::refuel(&mut live.store, live.fuel)?;
+         live.store.set_epoch_deadline(1);
+         let outcome = func.call(&mut live.store, &args, &mut results);
+         outcome
+@@ -543,7 +550,7 @@ impl Host {
+         // Ownership is gone even when the destructor traps. Report that
+         // separately from rejection, which leaves the wrapper live.
+         *released = true;
+-        live.store.set_fuel(live.fuel)?;
++        crate::refuel(&mut live.store, live.fuel)?;
+         live.store.set_epoch_deadline(1);
+         drop_guest_resource(self.dispatcher.as_ref(), resource, &mut live.store)
+             .map_err(anyhow::Error::from)
+@@ -559,7 +566,7 @@ impl Host {
+             .store(true, std::sync::atomic::Ordering::Release);
+         let mut first_error = None;
+         for resource in live.store.data_mut().resources.drain() {
+-            live.store.set_fuel(live.fuel)?;
++            crate::refuel(&mut live.store, live.fuel)?;
+             live.store.set_epoch_deadline(1);
+             if let Err(error) =
+                 drop_guest_resource(self.dispatcher.as_ref(), resource, &mut live.store)
+diff --git a/crates/perry-component-host/src/tests.rs b/crates/perry-component-host/src/tests.rs
+index 1a11980b..43485c23 100644
+--- a/crates/perry-component-host/src/tests.rs
++++ b/crates/perry-component-host/src/tests.rs
+@@ -233,6 +233,30 @@ fn memory_and_fuel_limits_stop_guest_execution() {
+     assert!(format!("{error:#}").contains("fuel"));
+ }
+ 
++#[test]
++fn zero_fuel_runs_unmetered_until_interrupted() {
++    let mut host = host(Options {
++        fuel: 0,
++        ..Options::default()
++    });
++    assert_eq!(
++        host.call("perry:test/transform@1.0.0", "returned", &[])
++            .unwrap(),
++        Some(json!(0))
++    );
++    let interrupt = host.interrupt_handle();
++    let thread = std::thread::spawn(move || {
++        // Far past what the default 10M fuel budget allows.
++        std::thread::sleep(std::time::Duration::from_millis(200));
++        interrupt.interrupt();
++    });
++    let error = host
++        .call("perry:test/transform@1.0.0", "spin", &[])
++        .unwrap_err();
++    thread.join().unwrap();
++    assert!(format!("{error:#}").contains("interrupt"), "{error:#}");
++}
++
+ #[test]
+ fn interrupt_stops_only_its_component() {
+     let mut spinning = host(Options {
