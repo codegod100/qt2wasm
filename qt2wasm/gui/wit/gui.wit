@@ -14,7 +14,9 @@
 ///   2. input arrives as `key` / `text` / `pointer` / `wheel` / `focus`;
 ///   3. after anything that may have changed the picture, and whenever the
 ///      app asked with `host.request-frame`, the host calls `paint`, which
-///      returns the damaged rectangles, then copies each with `frame-pixels`;
+///      returns the pixels to move (scrolling) and the damaged rectangles;
+///      the host moves those in its own copy, then copies each damaged
+///      rectangle with `frame-pixels`;
 ///   4. `tick` runs due timers and queued work; it returns how long until the
 ///      app next wants one (none: only when something happens);
 ///   5. `close` when the user closes the window; the app answers whether the
@@ -23,7 +25,7 @@
 /// Coordinates and sizes are device pixels, origin top left. Pixels cross the
 /// boundary base64 encoded in a string: hosts lift a `list<u8>` element by
 /// element, a string in one copy.
-package latha:gui@0.1.0;
+package latha:gui@0.2.0;
 
 interface types {
     /// A rectangle in device pixels.
@@ -37,6 +39,24 @@ interface types {
     record size {
         width: u32,
         height: u32,
+    }
+
+    /// Move the pixels inside `area` by (`dx`, `dy`), as a scrolled view
+    /// does: the host copies them within the frame it already shows, so they
+    /// need not cross the boundary again. Only `area` changes: what moves out
+    /// of it is dropped, and the strip it uncovers keeps its old pixels until
+    /// a damaged rectangle repaints it.
+    record move {
+        area: rect,
+        dx: s32,
+        dy: s32,
+    }
+
+    /// What changed since the last `paint`: first apply `moves`, in order,
+    /// to the shown frame, then copy each of `rects` with `frame-pixels`.
+    record damage {
+        moves: list<move>,
+        rects: list<rect>,
     }
 
     /// Keyboard modifiers held during an event. `keypad` marks a key on the
@@ -170,7 +190,7 @@ interface host {
 
 /// What the app gives the host.
 interface app {
-    use types.{rect, size, key-event, pointer-event, wheel-event};
+    use types.{rect, size, damage, key-event, pointer-event, wheel-event};
 
     /// Build the UI. `args` are the command line after the component's
     /// path, with the app's name (the wasm file's stem) first. Returns the
@@ -193,11 +213,12 @@ interface app {
     /// Run due timers and queued work. Returns the delay in ms until the app
     /// next needs a tick, none if only an event or `request-tick` will.
     tick: func() -> option<u32>;
-    /// Bring the frame up to date. Returns the rectangles that changed since
-    /// the last `paint` (empty: nothing to copy). The frame is the surface's
-    /// size once `resize` was called; after a resize the first paint reports
-    /// the whole frame.
-    paint: func() -> list<rect>;
+    /// Bring the frame up to date. Returns what changed since the last
+    /// `paint`: pixels that moved, then rectangles to copy (both empty:
+    /// nothing changed). The frame is the surface's size once `resize` was
+    /// called; after a resize the first paint reports the whole frame and no
+    /// moves.
+    paint: func() -> damage;
     frame-size: func() -> size;
     /// `r`'s pixels, base64: `r.height` rows of `r.width` pixels, each
     /// 4 bytes B, G, R, A with premultiplied alpha (little-endian 0xAARRGGBB:

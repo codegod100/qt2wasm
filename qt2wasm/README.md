@@ -308,7 +308,7 @@ The world in short (the WIT has the details):
 | `key`, `text`, `pointer`, `wheel`, `focus`, `color-scheme` | input |
 | `close() -> bool` | the user closed the window: may it go? |
 | `tick() -> option<u32>` | run due timers; ms until the next one |
-| `paint() -> list<rect>`, `frame-size`, `frame-pixels(rect) -> string` | damaged rectangles, then their pixels: base64 premultiplied BGRA (cairo ARGB32), one string copy instead of a per-byte `list<u8>` lift |
+| `paint() -> damage`, `frame-size`, `frame-pixels(rect) -> string` | moves (scrolled pixels the host shifts in its own copy) and damaged rectangles, then their pixels: base64 premultiplied BGRA (cairo ARGB32), one string copy instead of a per-byte `list<u8>` lift |
 
 | import `host` | |
 | --- | --- |
@@ -322,6 +322,16 @@ The world in short (the WIT has the details):
 run programs, such as a terminal. Every host function stays imported even
 when the app does not call it, because hosts match imports against the world
 exactly.
+
+Scrolling: `QBackingStore::scroll()` (logical pixels, whole device pixels
+only) or `qt2wasm::gui::scrollWindow(window, deviceRect, dx, dy)` (device
+pixels, any scale) moves pixels in the backing store and becomes a `move` in
+the next `paint`: the host shifts what it already shows, and only the
+uncovered strip crosses the boundary. In a `gui-pty` build, `qt2wasm/gui.h`
+also has `ptySpawn()` / `ptyWrite()` / `ptyResize()` / `ptyClose()`: output
+and the exit code reach callbacks at the host's ticks. `--moc DIR` mocs the
+Q_OBJECT headers of sources shared from another directory (kwi-wasm's
+`gui/app` builds its terminal core from `component/` this way).
 
 Limits: qt6-wasi is built without Qt's clipboard and input-method features,
 so QClipboard does not exist: use `qt2wasm::gui::clipboardText()` /

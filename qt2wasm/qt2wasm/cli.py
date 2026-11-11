@@ -120,6 +120,15 @@ def main(argv: list[str] | None = None) -> int:
         "platform plugin is compiled in. --gui gui-pty also imports latha:gui/pty",
     )
     b.add_argument(
+        "--moc",
+        action="append",
+        default=[],
+        metavar="DIR",
+        help="also moc the Q_OBJECT / Q_GADGET headers under DIR (repeatable), "
+        "for sources shared with another project; the generated moc files are "
+        "compiled in like the project's own",
+    )
+    b.add_argument(
         "--font",
         action="append",
         default=[],

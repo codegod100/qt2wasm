@@ -24,6 +24,14 @@
 
 #include QT2WASM_GUI_BINDINGS_H
 
+// wit-bindgen prefixes the world's own types with its name (gui_*, gui_pty_*).
+#ifdef QT2WASM_GUI_PTY
+using gui_string_t = gui_pty_string_t;
+using gui_list_string_t = gui_pty_list_string_t;
+#define gui_string_free gui_pty_string_free
+#define gui_list_string_free gui_pty_list_string_free
+#endif
+
 #if QT_CONFIG(clipboard)
 #include <QClipboard>
 #endif
@@ -53,6 +61,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 
 Q_IMPORT_PLUGIN(Qt2WasmGuiIntegrationPlugin)
 
@@ -112,6 +121,7 @@ struct State {
     QList<GuiWindow *> stack;  // visible top-levels, bottom to top
     QImage frame;              // device pixels, ARGB32_Premultiplied
     QRegion damage;            // device pixels, waiting for paint()
+    QList<latha_gui_types_move_t> moves;  // frame moves, waiting for paint()
     bool frameRequested = false;
     QPointer<QWindow> grab;    // the window a button press went to
     QPointer<QWindow> under;   // the window the pointer is over
@@ -294,8 +304,12 @@ public:
 
 class GuiBackingStore : public QPlatformBackingStore {
 public:
-    explicit GuiBackingStore(QWindow *w) : QPlatformBackingStore(w) {
-        if (auto *g = static_cast<GuiWindow *>(w->handle()))
+    explicit GuiBackingStore(QWindow *w) : QPlatformBackingStore(w) { attach(); }
+
+    // A QBackingStore may be made before its window has a platform window
+    // (one created in the window's constructor): attach once it has one.
+    void attach() {
+        if (auto *g = static_cast<GuiWindow *>(window()->handle()))
             g->store = this;
     }
     ~GuiBackingStore() override {
@@ -306,6 +320,7 @@ public:
     QPaintDevice *paintDevice() override { return &image; }
 
     void resize(const QSize &size, const QRegion &) override {
+        attach();
         const qreal dpr = S.scale;
         const QSize px(qMax(1, int(std::ceil(size.width() * dpr))), qMax(1, int(std::ceil(size.height() * dpr))));
         if (image.size() == px && image.devicePixelRatio() == dpr)
@@ -332,6 +347,8 @@ public:
             at += top->position();
             top = top->parent();
         }
+        if (top == window())
+            attach();
         auto *g = static_cast<GuiWindow *>(top->handle());
         if (!g || !g->shown)
             return;
@@ -343,6 +360,20 @@ public:
     }
 
     QImage toImage() const override { return image; }
+
+    // QBackingStore::scroll(): area and deltas in logical pixels. Only whole
+    // device pixels can move; otherwise Qt repaints instead.
+    bool scroll(const QRegion &area, int dx, int dy) override {
+        const qreal ddx = dx * S.scale, ddy = dy * S.scale;
+        if (std::floor(ddx) != ddx || std::floor(ddy) != ddy)
+            return false;
+        bool ok = true;
+        for (const QRect &r : area)
+            ok = scrollDevice(toDevice(r), int(ddx), int(ddy)) && ok;
+        return ok;
+    }
+
+    bool scrollDevice(const QRect &area, int dx, int dy);
 
     QImage image;
 };
@@ -388,6 +419,61 @@ void GuiWindow::hide() {
                 next = (*it)->window();
         QWindowSystemInterface::handleFocusWindowChanged(next, Qt::ActiveWindowFocusReason);
     }
+}
+
+// --- scrolling -------------------------------------------------------------------
+
+/// Move the pixels inside `area` of `img` by (dx, dy), clipped to `area`.
+void moveInImage(QImage &img, const QRect &area, int dx, int dy) {
+    const QRect a = area & img.rect();
+    const QRect dst = a.translated(dx, dy) & a;
+    if (dst.isEmpty())
+        return;
+    const QRect src = dst.translated(-dx, -dy);
+    const int bpp = img.depth() / 8;
+    const size_t bytes = size_t(dst.width()) * bpp;
+    uchar *bits = img.bits();
+    const qsizetype bpl = img.bytesPerLine();
+    auto row = [&](int y, int x) { return bits + y * bpl + qsizetype(x) * bpp; };
+    if (dy > 0) {
+        for (int i = dst.height() - 1; i >= 0; --i)
+            std::memmove(row(dst.top() + i, dst.left()), row(src.top() + i, src.left()), bytes);
+    } else {
+        for (int i = 0; i < dst.height(); ++i)
+            std::memmove(row(dst.top() + i, dst.left()), row(src.top() + i, src.left()), bytes);
+    }
+}
+
+/// area: device pixels of the window (its backing store's coordinates).
+bool GuiBackingStore::scrollDevice(const QRect &area, int dx, int dy) {
+    attach();
+    const QRect a = area & image.rect();
+    if (a.isEmpty() || (!dx && !dy))
+        return true;
+    moveInImage(image, a, dx, dy);
+    auto *g = static_cast<GuiWindow *>(window()->handle());
+    if (!g || !g->shown)
+        return true;
+    // The same move in the composed frame, which the host mirrors, when
+    // nothing else is stacked over that part of it; else compose it again.
+    const QRect inFrame = a.translated(toDevice(g->geometry()).topLeft()) & QRect(QPoint(), S.device);
+    if (inFrame.isEmpty())
+        return true;
+    bool covered = false;
+    for (GuiWindow *o : std::as_const(S.stack))
+        if (o != g && toDevice(o->geometry()).intersects(inFrame))
+            covered = true;
+    if (covered || S.frame.size() != S.device || (S.damage & inFrame) == QRegion(inFrame)) {
+        damageDevice(inFrame);
+        return true;
+    }
+    moveInImage(S.frame, inFrame, dx, dy);
+    // Damage that was waiting inside the area moved with the pixels.
+    const QRegion moved = (S.damage & inFrame).translated(dx, dy) & inFrame;
+    S.damage += moved;
+    S.moves.append({{inFrame.x(), inFrame.y(), uint32_t(inFrame.width()), uint32_t(inFrame.height())}, dx, dy});
+    requestFrame();
+    return true;
 }
 
 // --- clipboard, theme, integration -------------------------------------------
@@ -629,6 +715,7 @@ void ensureFrame() {
     S.frame = QImage(S.device, QImage::Format_ARGB32_Premultiplied);
     S.frame.fill(Qt::black);
     S.damage = QRect(QPoint(), S.device);
+    S.moves.clear();
 }
 
 void compose(const QRegion &region) {
@@ -657,7 +744,118 @@ QString clipboardText() { return hostText(latha_gui_host_clipboard_text); }
 void setClipboardText(const QString &text) { hostSetText(latha_gui_host_set_clipboard_text, text); }
 QString primaryText() { return hostText(latha_gui_host_primary_text); }
 void setPrimaryText(const QString &text) { hostSetText(latha_gui_host_set_primary_text, text); }
+
+void bell() { latha_gui_host_bell(); }
+
+bool scrollWindow(QWindow *window, const QRect &area, int dx, int dy) {
+    QPlatformWindow *pw = window ? window->handle() : nullptr;
+    auto *g = static_cast<GuiWindow *>(pw);
+    if (!g || !g->store || g->store->window() != window)
+        return false;
+    return g->store->scrollDevice(area, dx, dy);
+}
+
+#ifdef QT2WASM_GUI_PTY
+namespace {
+struct PtyState {
+    std::function<void(const QByteArray &)> output;
+    std::function<void(int)> exited;
+};
+std::map<int, PtyState> &ptys() {
+    static std::map<int, PtyState> m;
+    return m;
+}
+}  // namespace
+
+int ptySpawn(const QStringList &argv, const QList<std::pair<QString, QString>> &env, const QString &cwd, int cols,
+             int rows, std::function<void(const QByteArray &)> output, std::function<void(int)> exited, QString *error) {
+    QList<QByteArray> a8, e8;
+    for (const QString &a : argv)
+        a8.append(a.toUtf8());
+    for (const auto &kv : env) {
+        e8.append(kv.first.toUtf8());
+        e8.append(kv.second.toUtf8());
+    }
+    auto str = [](QByteArray &b) { return gui_pty_string_t{reinterpret_cast<uint8_t *>(b.data()), size_t(b.size())}; };
+    std::vector<gui_pty_string_t> as;
+    for (QByteArray &b : a8)
+        as.push_back(str(b));
+    std::vector<gui_pty_tuple2_string_string_t> es;
+    for (qsizetype i = 0; i + 1 < e8.size(); i += 2)
+        es.push_back({str(e8[i]), str(e8[i + 1])});
+    gui_pty_list_string_t al{as.data(), as.size()};
+    gui_pty_list_tuple2_string_string_t el{es.data(), es.size()};
+    QByteArray c8 = cwd.toUtf8();
+    gui_pty_string_t cs = str(c8);
+    uint32_t id = 0;
+    gui_pty_string_t err{};
+    if (!latha_gui_pty_spawn(&al, &el, cwd.isEmpty() ? nullptr : &cs, uint16_t(qBound(1, cols, 0xffff)),
+                             uint16_t(qBound(1, rows, 0xffff)), &id, &err)) {
+        const QString e = fromWit(&err);
+        if (error)
+            *error = e;
+        return -1;
+    }
+    ptys()[int(id)] = {std::move(output), std::move(exited)};
+    // Its first output arrives with a tick.
+    latha_gui_host_request_tick(0);
+    return int(id);
+}
+
+void ptyWrite(int id, const QByteArray &data) {
+    if (data.isEmpty() || !ptys().count(id))
+        return;
+    QByteArray copy = data;
+    gui_pty_list_u8_t l{reinterpret_cast<uint8_t *>(copy.data()), size_t(copy.size())};
+    latha_gui_pty_write(uint32_t(id), &l);
+}
+
+void ptyResize(int id, int cols, int rows) {
+    if (ptys().count(id))
+        latha_gui_pty_resize(uint32_t(id), uint16_t(qBound(1, cols, 0xffff)), uint16_t(qBound(1, rows, 0xffff)));
+}
+
+void ptyClose(int id) {
+    if (ptys().erase(id))
+        latha_gui_pty_close(uint32_t(id));
+}
+#endif
 }  // namespace qt2wasm::gui
+
+namespace {
+/// Hand pty output and exits to their callbacks (gui-pty), at each tick.
+void pollPtys() {
+#ifdef QT2WASM_GUI_PTY
+    QList<int> ids;
+    for (const auto &kv : qt2wasm::gui::ptys())
+        ids.append(kv.first);
+    for (int id : ids) {
+        for (;;) {
+            gui_pty_string_t s{};
+            latha_gui_pty_read(uint32_t(id), &s);
+            if (!s.len)
+                break;
+            const QByteArray data = QByteArray::fromBase64(QByteArray(reinterpret_cast<const char *>(s.ptr), qsizetype(s.len)));
+            gui_pty_string_free(&s);
+            auto it = qt2wasm::gui::ptys().find(id);
+            if (it == qt2wasm::gui::ptys().end())
+                break;
+            if (it->second.output)
+                it->second.output(data);
+        }
+        int32_t code = 0;
+        auto it = qt2wasm::gui::ptys().find(id);
+        if (it != qt2wasm::gui::ptys().end() && latha_gui_pty_exit_code(uint32_t(id), &code)) {
+            auto exited = std::move(it->second.exited);
+            qt2wasm::gui::ptys().erase(it);
+            latha_gui_pty_close(uint32_t(id));
+            if (exited)
+                exited(int(code));
+        }
+    }
+#endif
+}
+}  // namespace
 
 QPlatformIntegration *Qt2WasmGuiIntegrationPlugin::create(const QString &key, const QStringList &) {
     if (key.compare(QLatin1String("qt2wasmgui"), Qt::CaseInsensitive) == 0)
@@ -881,6 +1079,7 @@ bool exports_latha_gui_app_close(void) {
 
 bool exports_latha_gui_app_tick(uint32_t *ret) {
     GuiCall call;
+    pollPtys();
     // GuiCall's destructor runs the due work; report what is left after it.
     QWindowSystemInterface::sendWindowSystemEvents(QEventLoop::AllEvents);
     qt2wasm::pump();
@@ -892,10 +1091,12 @@ bool exports_latha_gui_app_tick(uint32_t *ret) {
     return true;
 }
 
-void exports_latha_gui_app_paint(exports_latha_gui_app_list_rect_t *ret) {
+void exports_latha_gui_app_paint(exports_latha_gui_app_damage_t *ret) {
     GuiCall call;
-    ret->ptr = nullptr;
-    ret->len = 0;
+    ret->moves.ptr = nullptr;
+    ret->moves.len = 0;
+    ret->rects.ptr = nullptr;
+    ret->rects.len = 0;
     S.frameRequested = false;
     ensureFrame();
     for (GuiWindow *g : QList<GuiWindow *>(S.stack))
@@ -907,6 +1108,12 @@ void exports_latha_gui_app_paint(exports_latha_gui_app_list_rect_t *ret) {
     qt2wasm::pump();
     const QRegion damage = S.damage & QRect(QPoint(), S.device);
     S.damage = QRegion();
+    if (!S.moves.isEmpty()) {
+        ret->moves.len = size_t(S.moves.size());
+        ret->moves.ptr = static_cast<latha_gui_types_move_t *>(std::malloc(sizeof(latha_gui_types_move_t) * S.moves.size()));
+        std::memcpy(ret->moves.ptr, S.moves.constData(), sizeof(latha_gui_types_move_t) * S.moves.size());
+        S.moves.clear();
+    }
     if (damage.isEmpty())
         return;
     compose(damage);
@@ -914,11 +1121,11 @@ void exports_latha_gui_app_paint(exports_latha_gui_app_list_rect_t *ret) {
     QList<QRect> rects(damage.begin(), damage.end());
     if (rects.size() > 16)
         rects = {damage.boundingRect()};
-    ret->len = size_t(rects.size());
-    ret->ptr = static_cast<exports_latha_gui_app_rect_t *>(std::malloc(sizeof(exports_latha_gui_app_rect_t) * rects.size()));
+    ret->rects.len = size_t(rects.size());
+    ret->rects.ptr = static_cast<latha_gui_types_rect_t *>(std::malloc(sizeof(latha_gui_types_rect_t) * rects.size()));
     for (qsizetype i = 0; i < rects.size(); ++i) {
         const QRect &r = rects[i];
-        ret->ptr[i] = {r.x(), r.y(), uint32_t(r.width()), uint32_t(r.height())};
+        ret->rects.ptr[i] = {r.x(), r.y(), uint32_t(r.width()), uint32_t(r.height())};
     }
 }
 

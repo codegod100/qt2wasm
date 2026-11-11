@@ -441,9 +441,12 @@ def build(args) -> Path:
 
     # 2. moc
     headers = find_headers(project, bdir)
+    extra = [Path(d).resolve() for d in getattr(args, "moc", None) or []]
+    for d in extra:
+        headers += [h for h in find_headers(d, bdir) if h not in headers]
     if not headers and not args.wit:
         raise BuildError("no headers with Q_OBJECT or Q_GADGET found")
-    incs = [f"-I{ROOT / 'include'}", f"-I{project}"]
+    incs = [f"-I{ROOT / 'include'}", f"-I{project}", *(f"-I{d}" for d in extra)]
     jsons = []
     for h in headers:
         cpp = gen / f"moc_{h.stem}.cpp"

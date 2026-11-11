@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from wasmtime import Engine, Store, WasiConfig
 from wasmtime.component import Component, Linker
 
-V = "0.1.0"
+V = "0.2.0"
 HOST, APP = f"latha:gui/host@{V}", f"latha:gui/app@{V}"
 
 
@@ -58,7 +58,9 @@ def main(path: str) -> int:
     assert any(isinstance(e, tuple) and e[0] == "tick" for e in log), "the clock timer asks for ticks"
 
     def paint():
-        rects = f("paint")()
+        d = f("paint")()
+        assert not d.moves, d.moves
+        rects = d.rects
         fs = f("frame-size")()
         return rects, fs
 
