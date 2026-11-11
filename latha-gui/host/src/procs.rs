@@ -266,7 +266,7 @@ impl Runtime {
             b.preopened_dir(host, guest, FsPerms::ReadWrite).with_context(|| format!("--dir {host}"))?;
         }
         if self.opts.network {
-            b.inherit_network().allow_ip_name_lookup(true);
+            b.inherit_network().allow_ip_name_lookup(true).allow_tcp(true).allow_udp(true);
         }
         Ok(b)
     }

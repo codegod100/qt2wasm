@@ -445,7 +445,7 @@ fn load(path: &Path, opts: Option<&LathaOptions>, cb: LathaCallbacks, args: &[St
         wasi.preopened_dir(host, guest, FsPerms::ReadWrite).with_context(|| format!("--dir {host}"))?;
     }
     if ro.network {
-        wasi.inherit_network().allow_ip_name_lookup(true);
+        wasi.inherit_network().allow_ip_name_lookup(true).allow_tcp(true).allow_udp(true);
     }
     // Processes the app starts (latha:proc) run in their own engine: big
     // stacks on their own threads, which this (the GUI's) thread has not.
