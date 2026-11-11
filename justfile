@@ -81,6 +81,12 @@ build-qt2wasm:
 build-all:
     {{pixi}} build-all
 
+# --- installing onto your system ---------------------------------------------
+
+# Put a prebuilt package from nandi-testing on your PATH (~/.pixi/bin, pixi global), e.g. `just install latha-gui`; rerun to update
+install pkg:
+    pixi global install --force-reinstall -c conda-forge -c https://prefix.dev/nandi-testing {{pkg}}
+
 # --- publishing (prefix.dev/nandi-testing) -----------------------------------
 # CI publishes on every push to main; these run the same scripts locally and
 # need PREFIX_TOKEN (prefix.dev API key with write access to nandi-testing).
