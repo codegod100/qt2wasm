@@ -19,6 +19,8 @@ $pub build qt2wasm/examples/counter -o /tmp/pub-counter.wasm
 $pub build qt2wasm/examples/canvas --font "$font" -o /tmp/pub-canvas.wasm
 pixi run python qt2wasm/tests/run_counter.py /tmp/pub-counter.wasm
 pixi run python qt2wasm/tests/run_canvas.py /tmp/pub-canvas.wasm /tmp/pub-canvas.png
+$pub build qt2wasm/examples/sketch --gui --font "$font" --js none -o /tmp/pub-sketch.wasm
+pixi run python qt2wasm/tests/run_sketch.py /tmp/pub-sketch.wasm
 # the JS bindings the published package writes by default (jco is a dependency)
 pixi run node qt2wasm/tests/run_counter_js.mjs /tmp/pub-counter-js
 pixi run node qt2wasm/tests/run_canvas_js.mjs /tmp/pub-canvas-js

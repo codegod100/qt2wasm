@@ -110,6 +110,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     b.add_argument("--world", help="world in --wit to target")
     b.add_argument(
+        "--gui",
+        nargs="?",
+        const="gui",
+        choices=["gui", "gui-pty"],
+        help="a GUI app: the component exports latha:gui/app (gui/wit/gui.wit) "
+        "and runs in a GUI host such as perry-gui. The project defines "
+        "qt2wasm_gui_main() (qt2wasm/gui.h) instead of main(); the qt2wasmgui "
+        "platform plugin is compiled in. --gui gui-pty also imports latha:gui/pty",
+    )
+    b.add_argument(
         "--font",
         action="append",
         default=[],

@@ -1,0 +1,236 @@
+/// latha:gui: a GUI app as one WebAssembly component.
+///
+/// The app draws its window into a frame buffer and the host shows it: the
+/// host owns the native window, its event loop and the clock; the app is a
+/// reactor and only runs inside an export call. A host is a small, generic
+/// loader (perry-gui in kwi-wasm: a GTK4 window), and any component that
+/// exports `app` and imports nothing but `host` (plus `pty`, and WASI) runs
+/// in it. qt2wasm builds such components from QtGui programs
+/// (`qt2wasm build --gui`, its `qt2wasmgui` platform plugin).
+///
+/// Life of an app:
+///   1. `start(args)`: build the UI. The host then calls `resize` with the
+///      real surface size before the first `paint`.
+///   2. input arrives as `key` / `text` / `pointer` / `wheel` / `focus`;
+///   3. after anything that may have changed the picture, and whenever the
+///      app asked with `host.request-frame`, the host calls `paint`, which
+///      returns the damaged rectangles, then copies each with `frame-pixels`;
+///   4. `tick` runs due timers and queued work; it returns how long until the
+///      app next wants one (none: only when something happens);
+///   5. `close` when the user closes the window; the app answers whether the
+///      host may close now (it can also leave any time with `host.quit`).
+///
+/// Coordinates and sizes are device pixels, origin top left. Pixels cross the
+/// boundary base64 encoded in a string: hosts lift a `list<u8>` element by
+/// element, a string in one copy.
+package latha:gui@0.1.0;
+
+interface types {
+    /// A rectangle in device pixels.
+    record rect {
+        x: s32,
+        y: s32,
+        width: u32,
+        height: u32,
+    }
+
+    record size {
+        width: u32,
+        height: u32,
+    }
+
+    /// Keyboard modifiers held during an event. `keypad` marks a key on the
+    /// numeric keypad.
+    flags modifiers {
+        shift,
+        ctrl,
+        alt,
+        meta,
+        keypad,
+    }
+
+    /// Mouse buttons held during an event.
+    flags buttons {
+        left,
+        right,
+        middle,
+        back,
+        forward,
+    }
+
+    enum button {
+        none,
+        left,
+        right,
+        middle,
+        back,
+        forward,
+    }
+
+    enum pointer-kind {
+        press,
+        release,
+        move,
+        /// The pointer entered the surface.
+        enter,
+        /// The pointer left the surface.
+        leave,
+    }
+
+    record pointer-event {
+        kind: pointer-kind,
+        /// The button that changed (`press` / `release`), else `none`.
+        button: button,
+        /// The buttons held after the event.
+        buttons: buttons,
+        modifiers: modifiers,
+        x: f64,
+        y: f64,
+        /// For `press`: 1 for a single click, 2 for a double click, ...
+        clicks: u32,
+    }
+
+    record key-event {
+        /// true on press (and auto-repeat), false on release.
+        pressed: bool,
+        repeat: bool,
+        /// The X11 / xkbcommon keysym (XK_*, e.g. 0xff0d Return, 0x61 `a`),
+        /// as GDK, Wayland and X11 report it; 0 if unknown.
+        keysym: u32,
+        /// The hardware key code (evdev + 8 on Linux), 0 if unknown.
+        scancode: u32,
+        modifiers: modifiers,
+        /// The text the press types, if any (control characters included,
+        /// e.g. "\r" for Return, "\u{3}" for Ctrl+C). Text from an input
+        /// method arrives through `app.text` instead.
+        text: string,
+    }
+
+    record wheel-event {
+        x: f64,
+        y: f64,
+        /// Wheel notches (1.0 = one notch; positive = down / right).
+        steps-x: f64,
+        steps-y: f64,
+        /// Smooth scrolling (touchpads), in device pixels; 0 if not known.
+        pixels-x: f64,
+        pixels-y: f64,
+        modifiers: modifiers,
+    }
+
+    /// Pointer shapes (CSS cursor names).
+    enum cursor {
+        default,
+        text,
+        pointer,
+        crosshair,
+        wait,
+        progress,
+        help,
+        move,
+        not-allowed,
+        grab,
+        grabbing,
+        ew-resize,
+        ns-resize,
+        nesw-resize,
+        nwse-resize,
+        col-resize,
+        row-resize,
+        none,
+    }
+}
+
+/// What the host gives the app.
+interface host {
+    use types.{cursor, size};
+
+    /// The picture changed: call `paint` soon (once per host frame at most).
+    request-frame: func();
+    /// Call `tick` after `delay-ms` (0: as soon as possible), e.g. for a
+    /// timer the app just started. A later request replaces an earlier one.
+    request-tick: func(delay-ms: u32);
+    set-title: func(title: string);
+    set-cursor: func(shape: cursor);
+    /// The smallest window size the app can use (device pixels); 0 x 0: any.
+    set-min-size: func(min: size);
+    /// The clipboard's text, empty if it holds none.
+    clipboard-text: func() -> string;
+    set-clipboard-text: func(text: string);
+    /// The X11 primary selection (middle-click paste); hosts without one
+    /// return "" and ignore the set.
+    primary-text: func() -> string;
+    set-primary-text: func(text: string);
+    /// Whether the desktop prefers a dark color scheme.
+    prefers-dark: func() -> bool;
+    bell: func();
+    /// Leave: the host closes the window and exits with `code`.
+    quit: func(code: s32);
+}
+
+/// What the app gives the host.
+interface app {
+    use types.{rect, size, key-event, pointer-event, wheel-event};
+
+    /// Build the UI. `args` are the command line after the component's
+    /// path, with the app's name (the wasm file's stem) first. Returns the
+    /// window size the app would like (device pixels at scale 1), 0 x 0 for
+    /// the host's default, or an error that makes the host exit.
+    start: func(args: list<string>) -> result<size, string>;
+    /// The surface is now `width` x `height` device pixels at `scale`
+    /// device pixels per logical pixel.
+    resize: func(width: u32, height: u32, scale: f64);
+    key: func(event: key-event);
+    /// Text committed by an input method (compose, dead keys, CJK, ...).
+    text: func(text: string);
+    pointer: func(event: pointer-event);
+    wheel: func(event: wheel-event);
+    focus: func(focused: bool);
+    /// The dark / light preference changed (see `host.prefers-dark`).
+    color-scheme: func(dark: bool);
+    /// The user asked to close the window: true lets the host close it.
+    close: func() -> bool;
+    /// Run due timers and queued work. Returns the delay in ms until the app
+    /// next needs a tick, none if only an event or `request-tick` will.
+    tick: func() -> option<u32>;
+    /// Bring the frame up to date. Returns the rectangles that changed since
+    /// the last `paint` (empty: nothing to copy). The frame is the surface's
+    /// size once `resize` was called; after a resize the first paint reports
+    /// the whole frame.
+    paint: func() -> list<rect>;
+    frame-size: func() -> size;
+    /// `r`'s pixels, base64: `r.height` rows of `r.width` pixels, each
+    /// 4 bytes B, G, R, A with premultiplied alpha (little-endian 0xAARRGGBB:
+    /// cairo's ARGB32, Qt's ARGB32_Premultiplied).
+    frame-pixels: func(r: rect) -> string;
+}
+
+/// Pseudo-terminals, for apps that run programs (terminal emulators).
+/// Output is polled: the host calls `app.tick` when a pty has data or ends.
+interface pty {
+    /// Start `argv` (argv[0] looked up in PATH; empty: the user's shell) on a
+    /// new pty of `cols` x `rows`, with `env` added to the host's
+    /// environment and `cwd` (none: the user's home). Returns its id.
+    spawn: func(argv: list<string>, env: list<tuple<string, string>>, cwd: option<string>,
+                cols: u16, rows: u16) -> result<u32, string>;
+    write: func(id: u32, data: list<u8>);
+    /// Everything the program wrote since the last read, base64 ("" = nothing).
+    read: func(id: u32) -> string;
+    resize: func(id: u32, cols: u16, rows: u16);
+    /// Its exit code once it has ended and its output was read, else none.
+    exit-code: func(id: u32) -> option<s32>;
+    /// Hang up (SIGHUP) and forget it.
+    close: func(id: u32);
+}
+
+/// A GUI app.
+world gui {
+    import host;
+    export app;
+}
+
+/// A GUI app that also runs programs on pseudo-terminals.
+world gui-pty {
+    include gui;
+    import pty;
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the counter (QtCore) and canvas (QtGui) examples into qt2wasm/build/
+# Build the counter (QtCore), canvas (QtGui) and sketch (a --gui app) examples into qt2wasm/build/
 # (`pixi run examples` at the repo root). Needs the qt6-wasi toolchain packages.
 # The canvas example embeds a TTF: QT2WASM_FONT, else the first DejaVu/Arial found.
 set -euo pipefail
@@ -19,3 +19,4 @@ mkdir -p "$out"
 export PYTHONPATH=$q
 python -m qt2wasm build "$here/counter" -o "$out/counter.wasm"
 python -m qt2wasm build "$here/canvas" --font "$font" -o "$out/canvas.wasm"
+python -m qt2wasm build "$here/sketch" --gui --font "$font" -o "$out/sketch.wasm"

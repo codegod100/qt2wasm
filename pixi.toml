@@ -49,14 +49,14 @@ description = "Run qt2wasm from the checkout, e.g. `pixi run qt2wasm build path/
 cmd = "python -m qt2wasm"
 
 [tasks.examples]
-description = "Build the counter and canvas examples into qt2wasm/build/"
+description = "Build the counter, canvas and sketch (--gui) examples into qt2wasm/build/"
 cmd = "bash qt2wasm/examples/build.sh"
-inputs = ["qt2wasm/qt2wasm/**", "qt2wasm/cmake/**", "qt2wasm/include/**", "qt2wasm/runtime/**", "qt2wasm/examples/build.sh", "qt2wasm/examples/*/CMakeLists.txt", "qt2wasm/examples/*/*.cpp", "qt2wasm/examples/*/*.h"]
-outputs = ["qt2wasm/build/counter.wasm", "qt2wasm/build/canvas.wasm"]
+inputs = ["qt2wasm/qt2wasm/**", "qt2wasm/cmake/**", "qt2wasm/include/**", "qt2wasm/runtime/**", "qt2wasm/gui/**", "qt2wasm/examples/build.sh", "qt2wasm/examples/*/CMakeLists.txt", "qt2wasm/examples/*/*.cpp", "qt2wasm/examples/*/*.h"]
+outputs = ["qt2wasm/build/counter.wasm", "qt2wasm/build/canvas.wasm", "qt2wasm/build/sketch.wasm"]
 
 [tasks.run]
-description = "Run both examples under wasmtime and their JS bindings under Node; saves qt2wasm/build/canvas.png"
-cmd = "python qt2wasm/tests/run_counter.py qt2wasm/build/counter.wasm && python qt2wasm/tests/run_canvas.py qt2wasm/build/canvas.wasm qt2wasm/build/canvas.png && node qt2wasm/tests/run_counter_js.mjs qt2wasm/build/counter-js && node qt2wasm/tests/run_canvas_js.mjs qt2wasm/build/canvas-js"
+description = "Run the examples under wasmtime and their JS bindings under Node; saves qt2wasm/build/canvas.png"
+cmd = "python qt2wasm/tests/run_counter.py qt2wasm/build/counter.wasm && python qt2wasm/tests/run_sketch.py qt2wasm/build/sketch.wasm && python qt2wasm/tests/run_canvas.py qt2wasm/build/canvas.wasm qt2wasm/build/canvas.png && node qt2wasm/tests/run_counter_js.mjs qt2wasm/build/counter-js && node qt2wasm/tests/run_canvas_js.mjs qt2wasm/build/canvas-js"
 depends-on = ["examples"]
 
 [tasks.test]
@@ -96,7 +96,7 @@ depends-on = [
 [tasks.build-qt2wasm]
 description = "pixi-build the qt2wasm conda package into qt2wasm/dist/"
 cmd = "\"$PIXI_EXE\" build --path qt2wasm/pixi.toml --output-dir qt2wasm/dist"
-inputs = ["qt2wasm/pixi.toml", "qt2wasm/pyproject.toml", "qt2wasm/qt2wasm/**", "qt2wasm/cmake/**", "qt2wasm/include/**", "qt2wasm/runtime/**"]
+inputs = ["qt2wasm/pixi.toml", "qt2wasm/pyproject.toml", "qt2wasm/qt2wasm/**", "qt2wasm/cmake/**", "qt2wasm/include/**", "qt2wasm/runtime/**", "qt2wasm/gui/**"]
 outputs = ["qt2wasm/dist/*.conda"]
 
 [tasks.build-all]

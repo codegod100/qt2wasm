@@ -22,7 +22,7 @@ All are linux-64 conda packages on [prefix.dev/nandi-testing](https://prefix.dev
 
 | Package | Version | What |
 | --- | --- | --- |
-| `qt2wasm` | 0.8.0 | the qt2wasm command, CMake module, headers and runtime; depends on everything below |
+| `qt2wasm` | 0.9.0 | the qt2wasm command, CMake module, headers and runtime (and the `--gui` platform plugin); depends on everything below |
 | `qt6-wasi` | 6.8.3 | Qt for WASI (`$PREFIX/opt/qt6-wasi`) |
 | `wasi-sdk` | 27.0 | clang 20, lld, wasi-libc, libc++ (`$PREFIX/opt/wasi-sdk`) |
 | `wit-bindgen` | 0.46.0 | upstream binary |

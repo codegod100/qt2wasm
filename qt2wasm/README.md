@@ -265,6 +265,71 @@ made. `--js auto` (the default) skips them quietly without jco, `--js always`
 makes a missing jco or a failed transpile an error, `--js none` turns them
 off. `qt2wasm js app.wasm [-o DIR]` does the same for any component.
 
+## GUI apps (`--gui`): a QtGui program as one windowed component
+
+`qt2wasm build --gui` makes a component that is a whole GUI app: it exports
+`latha:gui/app` from [`gui/wit/gui.wit`](gui/wit/gui.wit) and any latha:gui
+host opens it in a native window, sends it input and shows the frames it
+paints. In kwi-wasm, `perry-gui app.wasm` is that host (a GTK4 window from
+TypeScript compiled by Perry): `wasmtime run`, but with a window.
+
+```cpp
+#include <qt2wasm/gui.h>
+
+int qt2wasm_gui_main(int argc, char **argv) {   // instead of main()
+    auto *w = new MyRasterWindow;   // QGuiApplication already exists
+    w->resize(720, 480);            // the host's first window size
+    w->show();                      // the first top-level fills the host window
+    return 0;                       // no exec(): the host runs the loop
+}
+```
+
+```sh
+qt2wasm build examples/sketch --gui --font DejaVuSans.ttf -o sketch.wasm
+perry-gui sketch.wasm               # kwi-wasm: pixi run -e perry perry-gui sketch.wasm
+```
+
+Inside, the `qt2wasmgui` platform plugin ([`gui/`](gui/), compiled in instead
+of offscreen) turns the world into ordinary Qt: QWindow and QRasterWindow with
+QPainter, key events (X11 keysyms become Qt::Key), input method text, mouse,
+wheel, enter/leave and focus, cursor shapes, window title and minimum size,
+the dark / light color scheme (`QStyleHints::colorScheme()`, theme change
+events), HiDPI at any scale (Qt sees logical pixels, the frame is device
+pixels, as on Wayland), timers and `QWindow::requestUpdate()` paced by the
+host's frames, popups and tool tips composited above the main window,
+`QGuiApplication::quit()` and quit on the last window closing.
+
+The world in short (the WIT has the details):
+
+| export `app` | |
+| --- | --- |
+| `start(args) -> result<size, string>` | run `qt2wasm_gui_main`, answer the size the window wants |
+| `resize(width, height, scale)` | the surface in device pixels |
+| `key`, `text`, `pointer`, `wheel`, `focus`, `color-scheme` | input |
+| `close() -> bool` | the user closed the window: may it go? |
+| `tick() -> option<u32>` | run due timers; ms until the next one |
+| `paint() -> list<rect>`, `frame-size`, `frame-pixels(rect) -> string` | damaged rectangles, then their pixels: base64 premultiplied BGRA (cairo ARGB32), one string copy instead of a per-byte `list<u8>` lift |
+
+| import `host` | |
+| --- | --- |
+| `request-frame`, `request-tick(ms)` | wake the host for a paint / a tick |
+| `set-title`, `set-cursor`, `set-min-size`, `bell`, `quit(code)` | the window |
+| `clipboard-text`, `set-clipboard-text`, `primary-text`, `set-primary-text` | clipboard and X11 selection |
+| `prefers-dark` | the desktop's color scheme |
+
+`--gui gui-pty` targets the `gui-pty` world, which also imports
+`latha:gui/pty` (spawn, write, read, resize, exit-code, close) for apps that
+run programs, such as a terminal. Every host function stays imported even
+when the app does not call it, because hosts match imports against the world
+exactly.
+
+Limits: qt6-wasi is built without Qt's clipboard and input-method features,
+so QClipboard does not exist: use `qt2wasm::gui::clipboardText()` /
+`setClipboardText()` from `qt2wasm/gui.h`, and IME commits reach QWindows as
+key events with text. Only QtGui is in qt6-wasi (no QtWidgets or Qt Quick
+yet). Child QWindows are not separate surfaces. `tests/run_sketch.py` drives
+the sketch example as a host would (`pixi run run`).
+
 ## Writing a component (WIT-first)
 
 `qt2wasm build PROJECT --wit path/to/wit --world my-world` skips the WIT and

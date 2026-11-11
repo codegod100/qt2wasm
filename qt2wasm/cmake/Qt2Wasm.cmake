@@ -19,7 +19,12 @@ set(QT2WASM_ROOT "${_qt2wasm_root}" CACHE PATH "qt2wasm source dir")
 set(QT2WASM_QT_PREFIX "" CACHE PATH "Qt for WASI install prefix")
 set(QT2WASM_GEN_DIR "" CACHE PATH "qt2wasm generated sources")
 set(QT2WASM_COMPAT_DIR "" CACHE PATH "Qt WASI compat dir (wasi_compat.c)")
+set(QT2WASM_QT_VERSION "6.8.3" CACHE STRING "Qt for WASI version (its private header dirs)")
 set(QT2WASM_QPA_PLATFORM "offscreen" CACHE STRING "static QPA plugin for GUI components")
+# `qt2wasm build --gui`: the component is a latha:gui app (gui/wit/gui.wit);
+# qt2wasm's own qt2wasmgui platform plugin (gui/) is compiled in instead of a
+# prebuilt Qt one, and QT2WASM_GUI_WORLD names the wit-bindgen header.
+set(QT2WASM_GUI_WORLD "" CACHE STRING "latha:gui world of a --gui build (gui, gui-pty)")
 
 function(qt2wasm_add_component target)
     cmake_parse_arguments(A "GUI" "" "SOURCES;INCLUDE_DIRS" ${ARGN})
@@ -57,6 +62,19 @@ function(qt2wasm_add_component target)
         target_include_directories(${target} PRIVATE "${P}/include/QtGui")
         target_compile_definitions(${target} PRIVATE QT_GUI_LIB QT2WASM_GUI
             QT2WASM_QPA_PLATFORM="${QT2WASM_QPA_PLATFORM}")
+        if(QT2WASM_GUI_WORLD)
+            string(REPLACE "-" "_" _world_h "${QT2WASM_GUI_WORLD}")
+            target_sources(${target} PRIVATE
+                "${QT2WASM_ROOT}/gui/qt2wasmgui.cpp"
+                "${QT2WASM_GEN_DIR}/runtime/moc_qt2wasmgui.cpp")
+            target_include_directories(${target} PRIVATE "${QT2WASM_ROOT}/gui"
+                "${P}/include/QtCore/${QT2WASM_QT_VERSION}" "${P}/include/QtCore/${QT2WASM_QT_VERSION}/QtCore"
+                "${P}/include/QtGui/${QT2WASM_QT_VERSION}" "${P}/include/QtGui/${QT2WASM_QT_VERSION}/QtGui")
+            target_compile_definitions(${target} PRIVATE QT2WASM_GUI_BINDINGS_H="${_world_h}.h" QT_STATICPLUGIN)
+            if(QT2WASM_GUI_WORLD STREQUAL "gui-pty")
+                target_compile_definitions(${target} PRIVATE QT2WASM_GUI_PTY)
+            endif()
+        endif()
         string(TOLOWER "${QT2WASM_QPA_PLATFORM}" _qpa)
         string(SUBSTRING "${_qpa}" 0 1 _first)
         string(TOUPPER "${_first}" _first)
@@ -64,7 +82,13 @@ function(qt2wasm_add_component target)
         set(_plugin "Q${_first}${_rest}IntegrationPlugin")
         # Qt's object libraries: CMake 4's own WASI platform names them .obj, older CMake .o.
         set(_objs)
-        foreach(_o "plugins/platforms/objects-Release/${_plugin}_init/${_plugin}_init.cpp"
+        set(_plugin_objs "plugins/platforms/objects-Release/${_plugin}_init/${_plugin}_init.cpp")
+        set(_plugin_lib "${P}/plugins/platforms/libq${_qpa}.a")
+        if(QT2WASM_GUI_WORLD)
+            set(_plugin_objs)
+            set(_plugin_lib)
+        endif()
+        foreach(_o ${_plugin_objs}
                    "lib/objects-Release/Gui_resources_1/.qt/rcc/qrc_qpdf_init.cpp"
                    "lib/objects-Release/Gui_resources_2/.qt/rcc/qrc_gui_shaders_init.cpp")
             if(EXISTS "${P}/${_o}.obj")
@@ -75,7 +99,7 @@ function(qt2wasm_add_component target)
         endforeach()
         set(_libs
             ${_objs}
-            "${P}/plugins/platforms/libq${_qpa}.a"
+            ${_plugin_lib}
             "${P}/lib/libQt6Gui.a" "${P}/lib/libQt6BundledHarfbuzz.a"
             "${P}/lib/libQt6BundledFreetype.a" "${P}/lib/libQt6BundledLibpng.a"
             ${_libs})

@@ -431,6 +431,14 @@ def build(args) -> Path:
     tools = find_tools(args)
     log(f"Qt {tools.qt_prefix}, wasi-sdk {tools.wasi_sdk}")
 
+    gui = getattr(args, "gui", None)
+    if gui:
+        if args.wit:
+            raise BuildError("--gui implements gui/wit/gui.wit; it does not take --wit")
+        args.wit, args.world = str(ROOT / "gui" / "wit"), gui
+        if args.qpa == "offscreen":
+            args.qpa = "qt2wasmgui"
+
     # 2. moc
     headers = find_headers(project, bdir)
     if not headers and not args.wit:
@@ -449,6 +457,8 @@ def build(args) -> Path:
             gen / "runtime" / "moc_wasieventdispatcher.cpp",
         ]
     )
+    if gui:
+        run([tools.moc, ROOT / "gui" / "qt2wasmgui.h", "-o", gen / "runtime" / "moc_qt2wasmgui.cpp"])
     log(f"moc: {len(headers)} header(s)")
 
     # 3. codegen
@@ -495,9 +505,12 @@ def build(args) -> Path:
     if not args.wit:
         out.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(wit_dir / "component.wit", out.with_suffix(".wit"))
+    elif gui:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(wit_dir / "gui.wit", out.with_suffix(".wit"))
     out.parent.mkdir(parents=True, exist_ok=True)
     project_qch(args, tools, project, bdir, gen, out)
-    project_site(args, tools, wit_dir if args.wit else out.with_suffix(".wit"), out)
+    project_site(args, tools, wit_dir if args.wit and not gui else out.with_suffix(".wit"), out)
     if getattr(args, "docs_only", False):
         log(f"docs only: {out.with_suffix('.wit')} and friends in {time.time() - t0:.1f}s")
         return out.with_suffix(".wit")
@@ -531,6 +544,7 @@ def build(args) -> Path:
         f"-DQT2WASM_QT_PREFIX={tools.qt_prefix}",
         f"-DQT2WASM_GEN_DIR={gen}",
         f"-DQT2WASM_QPA_PLATFORM={args.qpa}",
+        f"-DQT2WASM_GUI_WORLD={gui or ''}",
     ]
     if tools.compat:
         cfg.append(f"-DQT2WASM_COMPAT_DIR={tools.compat}")
