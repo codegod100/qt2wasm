@@ -46,6 +46,16 @@ module or component, so a build adds them last, after `wac plug` (kwi-wasm's
 `scripts/embed-app-meta.py` does). `latha-gui --app-info APP.wasm` prints what
 an app carries.
 
+Plasma's task manager does not use the window icon when it finds a desktop
+file for the window, and with none for the app id it falls back to the
+process, latha-gui, and so to `latha-gui.desktop`. So for an app with an id,
+latha-gui writes `~/.local/share/applications/<id>.desktop` (hidden from
+menus, `Exec` = latha-gui on that .wasm, `Icon` = the app's icon saved as
+`~/.local/share/latha-gui/icons/<id>.png`) when it is missing or out of date,
+and runs `kbuildsycoca6` so Plasma sees it before the window opens.
+`LATHA_GUI_DESKTOP_ENTRY=0` turns that off; test runs (`--screenshot`,
+offscreen) never write it.
+
 `just install latha-gui` also puts the latha-gui icon into the hicolor theme;
 the desktop entry and `.wasm` files in the file manager use it.
 

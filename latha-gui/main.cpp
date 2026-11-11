@@ -190,7 +190,8 @@ void usage(FILE *f)
             "  --debug               paint timings on stderr (LATHA_GUI_DEBUG=1)\n"
             "  --verify              check every scroll move against a full copy (LATHA_GUI_VERIFY=1)\n"
             "  --app-info            print the app's id, name and icons (latha:app, latha:icon) and exit\n"
-            "environment: LATHA_GUI_THEME=dark|light, LATHA_GUI_CACHE=0, LATHA_GUI_CACHE_DIR\n");
+            "environment: LATHA_GUI_THEME=dark|light, LATHA_GUI_CACHE=0, LATHA_GUI_CACHE_DIR,\n"
+            "  LATHA_GUI_DESKTOP_ENTRY=0 (do not write ~/.local/share/applications/<app id>.desktop)\n");
 }
 
 } // namespace
@@ -307,6 +308,14 @@ int main(int argc, char **argv)
     // Wayland, _NET_WM_ICON on X11).
     const QIcon appIcon = meta.icon();
     QApplication::setWindowIcon(appIcon.isNull() ? lathaGuiIcon() : appIcon);
+    // Plasma's task manager ignores the window icon when it finds a desktop
+    // file for the window, and otherwise finds latha-gui.desktop by our
+    // process: give the app its own entry (appmeta.h). Not for test runs.
+    const QString platform = QGuiApplication::platformName();
+    if ((platform == QLatin1String("wayland") || platform == QLatin1String("xcb")) && opts.screenshot.isEmpty()
+        && qgetenv("LATHA_GUI_DESKTOP_ENTRY") != "0" && installDesktopEntry(meta, QString::fromLocal8Bit(wasmPath))
+        && opts.debug)
+        fprintf(stderr, "latha-gui: wrote the desktop entry %s.desktop\n", qPrintable(meta.id));
 
     // argv[0] stays the file name; latha:app's name is the first window title.
     QString appName = QFileInfo(QString::fromLocal8Bit(wasmPath)).fileName();

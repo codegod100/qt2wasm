@@ -2,9 +2,15 @@
 // SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only
 #include "appmeta.h"
 
+#include <QBuffer>
+#include <QCoreApplication>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QImage>
 #include <QPixmap>
+#include <QProcess>
+#include <QStandardPaths>
 
 namespace {
 
@@ -100,4 +106,105 @@ QIcon lathaGuiIcon()
     for (int s : {16, 32, 48, 256})
         icon.addFile(QStringLiteral(":/latha-gui/latha-gui-%1.png").arg(s), QSize(s, s));
     return QIcon::fromTheme(QStringLiteral("latha-gui"), icon);
+}
+
+namespace {
+
+// Writes BYTES to PATH unless it already holds them; true if it wrote.
+bool writeIfChanged(const QString &path, const QByteArray &bytes)
+{
+    QFile f(path);
+    if (f.open(QIODevice::ReadOnly) && f.readAll() == bytes)
+        return false;
+    f.close();
+    QDir().mkpath(QFileInfo(path).absolutePath());
+    QFile out(path + QStringLiteral(".tmp"));
+    if (!out.open(QIODevice::WriteOnly) || out.write(bytes) != bytes.size())
+        return false;
+    out.close();
+    QFile::remove(path);
+    return out.rename(path);
+}
+
+// Desktop Entry Exec quoting: the argument in double quotes, with ", `, $
+// and \ escaped (and % doubled, Exec's own escape).
+QString execQuote(const QString &arg)
+{
+    QString q;
+    for (const QChar c : arg) {
+        if (c == u'"' || c == u'`' || c == u'$' || c == u'\\')
+            q += u'\\';
+        q += c;
+        if (c == u'%')
+            q += u'%';
+    }
+    return u'"' + q + u'"';
+}
+
+} // namespace
+
+bool installDesktopEntry(const AppMeta &meta, const QString &wasmPath)
+{
+    if (meta.id.isEmpty() || meta.id == QLatin1String("latha-gui"))
+        return false;
+    const QString data = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    if (data.isEmpty())
+        return false;
+    // The largest icon, as PNG (whatever format the app embedded).
+    QImage best;
+    for (const QByteArray &bytes : meta.icons) {
+        QImage img;
+        if (img.loadFromData(bytes) && img.width() * img.height() > best.width() * best.height())
+            best = img;
+    }
+    bool wrote = false;
+    QString iconPath;
+    if (!best.isNull()) {
+        QByteArray png;
+        QBuffer buf(&png);
+        buf.open(QIODevice::WriteOnly);
+        best.save(&buf, "PNG");
+        iconPath = data + QStringLiteral("/latha-gui/icons/") + meta.id + QStringLiteral(".png");
+        wrote |= writeIfChanged(iconPath, png);
+    }
+    const QString name = meta.name.isEmpty() ? meta.id : meta.name;
+    // latha-gui from PATH when it is there (the /usr/bin link of `just install`),
+    // so runs from different pixi envs do not rewrite the entry each time.
+    QString exe = QStandardPaths::findExecutable(QStringLiteral("latha-gui"));
+    if (exe.isEmpty())
+        exe = QCoreApplication::applicationFilePath();
+    const QString entry = QStringLiteral("[Desktop Entry]\n"
+                                         "# Written by latha-gui for the latha:gui app %1, so the desktop shows the\n"
+                                         "# app's own name and icon for its windows. latha-gui rewrites it when the\n"
+                                         "# app changes; delete it freely.\n"
+                                         "Type=Application\n"
+                                         "Name=%2\n"
+                                         "Comment=%3 (a WebAssembly app, run by latha-gui)\n"
+                                         "Exec=%4 %5\n"
+                                         "Icon=%6\n"
+                                         "Terminal=false\n"
+                                         "NoDisplay=true\n"
+                                         "StartupWMClass=%7\n")
+                              .arg(QFileInfo(wasmPath).absoluteFilePath(), name, name,
+                                   execQuote(exe), execQuote(QFileInfo(wasmPath).absoluteFilePath()),
+                                   iconPath.isEmpty() ? QStringLiteral("latha-gui") : iconPath, meta.id);
+    wrote |= writeIfChanged(data + QStringLiteral("/applications/") + meta.id + QStringLiteral(".desktop"),
+                            entry.toUtf8());
+    if (wrote) {
+        // Plasma resolves desktop files through its service cache (ksycoca);
+        // kded would notice the new file too, but maybe after our window
+        // shows. Elsewhere update-desktop-database is optional.
+        for (const QString &tool : {QStringLiteral("kbuildsycoca6"), QStringLiteral("kbuildsycoca5")}) {
+            const QString path = QStandardPaths::findExecutable(tool);
+            if (path.isEmpty())
+                continue;
+            QProcess p;
+            p.setProcessChannelMode(QProcess::ForwardedErrorChannel);
+            p.setStandardOutputFile(QProcess::nullDevice());
+            p.start(path, {});
+            p.waitForFinished(5000);
+            break;
+        }
+    }
+    return wrote;
 }
