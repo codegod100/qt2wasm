@@ -27,6 +27,7 @@ source:
       - latha-android/**
       - latha-gui/host/**
       - qt2wasm/gui/wit/**
+      - qt2wasm/proc/**
       - qt2wasm/examples/sketch/**
 
 build:
