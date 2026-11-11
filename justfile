@@ -83,9 +83,26 @@ build-all:
 
 # --- installing onto your system ---------------------------------------------
 
-# Put a prebuilt package from nandi-testing on your PATH (~/.pixi/bin, pixi global), e.g. `just install latha-gui`; rerun to update
+# Install a prebuilt nandi-testing package (pixi global) and link its programs into /usr/bin (sudo), e.g. `just install latha-gui`; rerun to update
 install pkg:
-    pixi global install --force-reinstall -c conda-forge -c https://prefix.dev/nandi-testing {{pkg}}
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pixi global install --force-reinstall -c conda-forge -c https://prefix.dev/nandi-testing "{{pkg}}"
+    bin=${PIXI_HOME:-$HOME/.pixi}/bin
+    # The programs pixi exposed for this env (its trampolines need their env,
+    # so /usr/bin gets symlinks to them, not copies).
+    exes=()
+    for cfg in "$bin"/trampoline_configuration/*.json; do
+        [ -e "$cfg" ] || continue
+        grep -q "/envs/{{pkg}}/" "$cfg" && exes+=("$(basename "$cfg" .json)")
+    done
+    [ ${#exes[@]} -gt 0 ] || { [ -e "$bin/{{pkg}}" ] && exes=("{{pkg}}"); }
+    [ ${#exes[@]} -gt 0 ] || { echo "no programs found for {{pkg}} in $bin" >&2; exit 1; }
+    echo "linking ${exes[*]} into /usr/bin (needs sudo)"
+    for exe in "${exes[@]}"; do
+        sudo ln -sfn "$bin/$exe" "/usr/bin/$exe"
+        echo "/usr/bin/$exe -> $bin/$exe"
+    done
 
 # --- publishing (prefix.dev/nandi-testing) -----------------------------------
 # CI publishes on every push to main; these run the same scripts locally and
