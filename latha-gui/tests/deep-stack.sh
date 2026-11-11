@@ -13,9 +13,10 @@ RUSTFLAGS="-C link-arg=-zstack-size=134217728" cargo build -q --release --target
 app=$CARGO_TARGET_DIR/wasm32-wasip2/release/deep_stack.wasm
 out=${TMPDIR:-/tmp}/latha-deep-stack.png
 export QT_QPA_PLATFORM=offscreen LANG=${LANG:-C.UTF-8}
-"$gui" --screenshot "$out" --quit-after 2000 "$app" 2>&1 | grep -q 'recursed 1000000 calls' \
-    || { echo "deep-stack: failed with the default stack" >&2; exit 1; }
-if LATHA_GUI_WASM_STACK_MB=1 "$gui" --screenshot "$out" --quit-after 2000 "$app" 2>&1 | grep -q 'recursed'; then
+log=$("$gui" --screenshot "$out" --quit-after 2000 "$app" 2>&1 || true)
+grep -q 'recursed 1000000 calls' <<<"$log" || { echo "$log" >&2; echo "deep-stack: failed with the default stack" >&2; exit 1; }
+log=$(LATHA_GUI_WASM_STACK_MB=1 "$gui" --screenshot "$out" --quit-after 2000 "$app" 2>&1 || true)
+if grep -q 'recursed' <<<"$log"; then
     echo "deep-stack: a 1 MiB stack should not have been enough" >&2
     exit 1
 fi

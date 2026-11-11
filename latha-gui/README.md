@@ -104,7 +104,7 @@ followed live; our own Qt cannot load KDE's platform theme, so QPalette does
 not know it), `LATHA_GUI_OPEN_URL=COMMAND` (runs COMMAND URL for
 `host.open-url`, e.g. a particular browser; else QDesktopServices: the XDG
 portal in a sandbox, otherwise xdg-open / the desktop's opener),
-`LATHA_GUI_WINDOW_SIZE=WxH`, `LATHA_GUI_CACHE=0`,
+`LATHA_GUI_WINDOW_SIZE=WxH`, `LATHA_GUI_WASM_STACK_MB=N` (default 256), `LATHA_GUI_CACHE=0`,
 `LATHA_GUI_CACHE_DIR`. The app gets our environment minus `QT_*` / `QML*`
 (those are for this window's Qt, not the app's). Programs on a pty get our
 environment plus what the app passes, `TERM=xterm-256color` unless it sets
@@ -127,6 +127,12 @@ latha-gui, no Qt needed) does only that:
 latha-run [--dir HOST[::GUEST]]... [--no-root] [--no-cache] [--no-network] APP.wasm [ARGS...]
 latha-gui js.wasm -c 'print(6 * 7)'      # webby's wasm/ build of Ladybird's js
 ```
+
+The window's app gets the same 256 MiB wasm stack as commands
+(`LATHA_GUI_WASM_STACK_MB=N` to change it): its export calls run on a fiber
+with that stack (wasmtime's async call, mapped lazily), still on the GUI
+thread, so imports (clipboard, title, ...) are plain Qt calls. LibWeb layout
+and LibJS in a window app recurse as deeply as natively (`tests/deep-stack.sh`).
 
 Every engine (app and commands) has wasm exception handling (exnref, which
 wasi-sdk's `-mllvm -wasm-enable-sjlj -mllvm -wasm-use-legacy-eh=false
