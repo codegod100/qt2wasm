@@ -368,6 +368,7 @@ fn load(path: &Path, opts: Option<&LathaOptions>, cb: LathaCallbacks, args: &[St
     let mut linker: Linker<Host> = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
     GuiPty::add_to_linker::<Host, HasSelf<Host>>(&mut linker, |h| h)?;
+    stub_newer_imports(&mut linker, &component, &engine)?;
 
     let mut wasi = WasiCtxBuilder::new();
     wasi.inherit_stdio().args(args);
@@ -481,6 +482,46 @@ fn buttons(bits: u32) -> wt::Buttons {
 }
 
 // --- C API -----------------------------------------------------------------------------
+
+/// Our latha:gui version (gui.wit's `package` line).
+const GUI_VERSION: &str = "0.2.1";
+
+/// Version skew: an app built against a newer latha:gui 0.2.x imports
+/// `latha:gui/host@0.2.N` (or pty), which wasmtime resolves to our 0.2.1
+/// instance by semver, but it may call functions we do not have yet. Add those
+/// to our instance as functions that trap when called, so the app still loads
+/// and works unless it uses one. (Not `define_unknown_imports_as_traps`: that
+/// would also shadow the semver-matched WASI imports.)
+fn stub_newer_imports(linker: &mut Linker<Host>, component: &Component, engine: &Engine) -> Result<()> {
+    use wasmtime::component::types::ComponentItem;
+    let ty = component.component_type();
+    for (name, item) in ty.imports(engine) {
+        let Some(rest) = name.strip_prefix("latha:gui/") else { continue };
+        let iface = rest.split('@').next().unwrap_or(rest);
+        if iface == "types" {
+            continue;
+        }
+        let ComponentItem::ComponentInstance(inst) = item.ty else { continue };
+        let ours = format!("latha:gui/{iface}@{GUI_VERSION}");
+        let mut li = linker.instance(&ours)?;
+        for (func, fitem) in inst.exports(engine) {
+            if !matches!(fitem.ty, ComponentItem::ComponentFunc(_)) {
+                continue;
+            }
+            let full = format!("{name}#{func}");
+            // Already defined (one of ours): the insert fails, keep ours.
+            if li
+                .func_new(func, move |_, _, _, _| {
+                    Err(format_err!("{full}: this latha-gui ({GUI_VERSION}) does not have it; update latha-gui"))
+                })
+                .is_ok()
+            {
+                eprintln!("latha-gui: the app imports {name}#{func}, newer than this latha-gui ({GUI_VERSION}): it traps if called");
+            }
+        }
+    }
+    Ok(())
+}
 
 /// Load and instantiate `path` (a component for latha:gui or latha:gui-pty).
 /// `args` (the app's name first) become its WASI arguments. NULL on error,
