@@ -12,29 +12,56 @@
 # compiles static stub archives for both that abort with a message if a
 # WebView or MapView is ever created; every other widget works.
 #
+# Build 1: the native compiler binary is rebuilt from Perry's source at the
+# npm release's revision (perry-ext's target.json names it) with
+# strip-dedup-extract.patch, and replaces the npm one; everything else (the
+# runtime/stdlib/UI archives, the extension pack) is still the npm release's.
+# The patch makes the link step's strip-dedup pass read libperry_ui_gtk4.a
+# once in-process instead of running `llvm-ar x` once per kept member (~2,400
+# runs over a 150 MB archive): a GTK4 app links in ~8 s instead of ~41 s, with
+# byte-identical output. Built like Perry's release: pinned nightly via
+# rustup, `--profile prod`, LLVM 22.1 linked statically (conda-forge llvmdev).
+#
 # $PREFIX/bin/perry is a wrapper (perry-wrapper.sh) that puts the conda
 # toolchain and libraries on Perry's link line, with an rpath to this env.
 # Published to prefix.dev/nandi-testing by ci/publish.py.
 context:
   version: "0.5.1665"
+  rev: 08b384fa365bf1a656498f629f97d6a9e688cffd
+  rust: nightly-2026-10-04
 
 package:
   name: perry
   version: ${{ version }}
 
 build:
-  number: 0
+  number: 1
   skip: not (linux and x86_64)
   prefix_detection:
     ignore: true
   dynamic_linking:
     binary_relocation: false
-  script: bash "$RECIPE_DIR/build.sh"
+  script:
+    env:
+      PERRY_REV: ${{ rev }}
+      PERRY_RUST: ${{ rust }}
+    file: build.sh
 
 requirements:
   build:
     - ${{ compiler('c') }}
+    - ${{ compiler('cxx') }}
     - nodejs >=20
+    - zstd
+    - git
+    - curl
+    - ca-certificates
+  host:
+    # Perry links LLVM statically (llvm-sys 221, inkwell)
+    - llvmdev 22.1.*
+    - libxml2-devel
+    - libffi
+    - zlib
     - zstd
   run:
     # the prebuilt compiler itself links these

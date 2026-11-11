@@ -1,0 +1,127 @@
+diff --git a/crates/perry/src/commands/compile/strip_dedup.rs b/crates/perry/src/commands/compile/strip_dedup.rs
+index 037a5663d..1cec7519b 100644
+--- a/crates/perry/src/commands/compile/strip_dedup.rs
++++ b/crates/perry/src/commands/compile/strip_dedup.rs
+@@ -908,9 +908,12 @@ pub(super) fn strip_duplicate_objects_from_lib_with_evidence(
+ 
+     let mut excluded_by_subset = 0usize;
+     let mut excluded_by_pattern = 0usize;
+-    let ui_only_deps: Vec<&String> = staticlib_members
++    // (position in `ar t` order, name): the position lets the extraction
++    // below address a member directly even when names repeat.
++    let ui_only_deps: Vec<(usize, &String)> = staticlib_members
+         .iter()
+-        .filter(|m| {
++        .enumerate()
++        .filter(|(_, m)| {
+             if is_windows_import_archive_member(m) {
+                 return false;
+             }
+@@ -975,7 +978,28 @@ pub(super) fn strip_duplicate_objects_from_lib_with_evidence(
+     let mut all_objects: Vec<std::path::PathBuf> = Vec::new();
+ 
+     // If we have an rlib, extract UI crate objects from it (skipping alloc shims).
++    // Read the archive once in-process when possible; one `llvm-ar x` per
++    // member re-reads the whole archive every time.
++    let mut rlib_done = false;
+     if has_rlib {
++        let abs_rlib = std::fs::canonicalize(&rlib_path)?;
++        if let Some(written) = extract_members_in_process(&abs_rlib, &extract_dir, "rlib", |names| {
++            let objs: Vec<&str> = names.iter().map(String::as_str).filter(|n| n.ends_with(".o")).collect();
++            if objs != rlib_objects.iter().map(String::as_str).collect::<Vec<_>>() {
++                return None;
++            }
++            Some((0..names.len()).filter(|&i| is_rust_codegen_unit(&names[i])).collect())
++        }) {
++            eprintln!(
++                "[strip-dedup] rlib: extracted {} (in-process), skipped {} alloc shims",
++                written.len(),
++                rlib_objects.len() - written.len()
++            );
++            all_objects.extend(written);
++            rlib_done = true;
++        }
++    }
++    if has_rlib && !rlib_done {
+         let abs_rlib = std::fs::canonicalize(&rlib_path)?;
+         let mut rlib_extracted = 0usize;
+         let mut rlib_skipped = 0usize;
+@@ -1012,7 +1036,21 @@ pub(super) fn strip_duplicate_objects_from_lib_with_evidence(
+     // is read (the warning below); the parallel `extract_ok` counter
+     // was incremented but never reported. Dropped.
+     let mut extract_fail = 0usize;
+-    for (member_index, member) in ui_only_deps.iter().enumerate() {
++    let in_process = extract_members_in_process(&abs_staticlib, &extract_dir, "static", |names| {
++        (names == staticlib_members.as_slice()).then(|| ui_only_deps.iter().map(|(i, _)| *i).collect())
++    });
++    if let Some(ref written) = in_process {
++        eprintln!(
++            "[strip-dedup] {lib_name}: extracted {} members in-process",
++            written.len()
++        );
++        all_objects.extend(written.iter().cloned());
++    }
++    for (member_index, (_, member)) in ui_only_deps
++        .iter()
++        .enumerate()
++        .filter(|_| in_process.is_none())
++    {
+         let out = Command::new(&llvm_ar)
+             .arg("x")
+             .arg(&abs_staticlib)
+@@ -1052,6 +1090,55 @@ pub(super) fn strip_duplicate_objects_from_lib_with_evidence(
+     Ok(trimmed_lib)
+ }
+ 
++/// Copy members of the archive at `archive` into `extract_dir`, reading it once.
++///
++/// `select` gets every member name in archive order (the same list `ar t`
++/// prints) and returns the positions to extract, or `None` to decline. Member
++/// `i` is written to `<prefix>_<i>.obj`, so repeated names never collide.
++/// Returns the written paths in the order `select` gave, or `None` when the
++/// archive cannot be read this way (thin or unrecognized archives, a name list
++/// that does not match the caller's) and the caller should use `llvm-ar x`.
++///
++/// Running `llvm-ar x ARCHIVE MEMBER` once per kept member re-reads the whole
++/// archive each time: ~2,400 runs over the ~150 MB `libperry_ui_gtk4.a`, about
++/// 35 s of every Linux UI link, against well under a second here.
++fn extract_members_in_process(
++    archive: &Path,
++    extract_dir: &Path,
++    prefix: &str,
++    select: impl FnOnce(&[String]) -> Option<Vec<usize>>,
++) -> Option<Vec<PathBuf>> {
++    if std::env::var_os("PERRY_STRIP_DEDUP_AR_EXTRACT").is_some() {
++        return None;
++    }
++    let data = std::fs::read(archive).ok()?;
++    let parsed = object::read::archive::ArchiveFile::parse(&*data).ok()?;
++    if parsed.is_thin() {
++        return None;
++    }
++    let mut names = Vec::new();
++    let mut ranges = Vec::new();
++    for member in parsed.members() {
++        let member = member.ok()?;
++        names.push(String::from_utf8(member.name().to_vec()).ok()?);
++        let (offset, size) = member.file_range();
++        let start = usize::try_from(offset).ok()?;
++        let end = start.checked_add(usize::try_from(size).ok()?)?;
++        if end > data.len() {
++            return None;
++        }
++        ranges.push(start..end);
++    }
++    let wanted = select(&names)?;
++    let mut written = Vec::with_capacity(wanted.len());
++    for i in wanted {
++        let path = extract_dir.join(format!("{prefix}_{i}.obj"));
++        std::fs::write(&path, &data[ranges.get(i)?.clone()]).ok()?;
++        written.push(path);
++    }
++    Some(written)
++}
++
+ /// Rebuild an archive without exceeding Windows' process command-line limit.
+ ///
+ /// A Windows UI staticlib contains hundreds of members; passing every
