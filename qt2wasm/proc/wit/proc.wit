@@ -68,10 +68,15 @@ interface process {
     /// component) as a new process on its own thread. `args` are its
     /// arguments, its name first. A relative path is relative to the
     /// directory of the caller's own .wasm; "" means the caller's own module.
-    /// The child sees the same directories and environment as we do. Returns
+    /// The child sees the same directories and environment as we do (our
+    /// environment as we were started with it). Returns
     /// its pid and our end of a channel whose other end is the child's
     /// `parent()`.
     spawn: func(path: string, args: list<string>) -> result<tuple<u32, handle>, string>;
+
+    /// `spawn`, with `env` ("NAME=value" entries) as the child's whole
+    /// environment instead of ours (latha-gui 0.4.0 and later).
+    spawn-with-env: func(path: string, args: list<string>, env: list<string>) -> result<tuple<u32, handle>, string>;
 
     /// The exit code of a child once it ended (`timeout-ms` as for recv),
     /// else none. A child that trapped exits with 128 + 6.
@@ -81,7 +86,48 @@ interface process {
     kill: func(pid: u32);
 }
 
+/// Shared memory: an object of bytes that several processes map into their
+/// own linear memory, so all of them see the same bytes (Ladybird's
+/// AnonymousBuffer: bitmaps WebContent paints and the UI shows). A handle to
+/// one lives in the same table as endpoints: `channels.close` closes it, and it
+/// moves in a message like an endpoint does (send a `dup` to keep yours). The
+/// object goes away with its last handle and mapping.
+interface memory {
+    use channels.{handle};
+
+    enum error {
+        /// Not a memory handle of this instance.
+        bad-handle,
+        /// An address, length or offset that is not a multiple of page-size.
+        unaligned,
+        /// A range outside our linear memory, or past the object's end.
+        fault,
+        /// The host could not make or map it.
+        no-memory,
+    }
+
+    /// A new object of `size` bytes, zeroed.
+    create: func(size: u64) -> result<handle, error>;
+    /// Another handle to the same object.
+    dup: func(h: handle) -> result<handle, error>;
+    size: func(h: handle) -> result<u64, error>;
+    /// Make it bigger (never smaller: a mapping past the end would fault on the
+    /// host, so a smaller size is refused with `fault`).
+    resize: func(h: handle, size: u64) -> result<_, error>;
+    /// Make our linear memory [addr, addr + len) the object's bytes from `offset`.
+    /// All three are multiples of page-size; the range must be in our memory
+    /// already (allocate it, page aligned, then map over it).
+    map-at: func(h: handle, offset: u64, addr: u32, len: u32) -> result<_, error>;
+    /// Give [addr, addr + len) of our memory its own zeroed pages again.
+    unmap-at: func(addr: u32, len: u32) -> result<_, error>;
+    /// The host's page size (4096 on x86-64 Linux).
+    page-size: func() -> u32;
+    /// Whether `h` is a memory handle (else an endpoint, or not ours).
+    is-memory: func(h: handle) -> bool;
+}
+
 world proc {
     import channels;
     import process;
+    import memory;
 }

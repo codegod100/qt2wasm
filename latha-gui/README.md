@@ -151,20 +151,36 @@ to them over channels, [`../qt2wasm/proc/wit/proc.wit`](../qt2wasm/proc/wit/proc
 - `spawn(path, args)`: a new instance of a module or command component (""
   = the caller's own .wasm, relative paths from its directory) on its own
   native thread with a big stack; returns a pid and our end of a channel whose
-  other end is the child's `parent()`. `wait-exit`, `kill` (the child traps at
-  its next loop or call; checked every 10 ms by the engine's epoch).
+  other end is the child's `parent()`. `spawn-with-env(path, args, env)` gives
+  the child that environment instead of ours (each process passes on the one
+  it was started with). `wait-exit`, `kill` (the child traps at its next loop
+  or call; checked every 10 ms by the engine's epoch).
 - channels: `pair`, `send(h, bytes, handles)` (never blocks; the handles move
   to the receiver, like SCM_RIGHTS), `recv(h, timeout)`, `wait(handles,
   timeout)`, `close`. Closing an end (or the process ending) shows up on the
   other end as `closed` once it has read what was queued.
 
-Each process has its own store and memory; nothing is shared but messages,
-which are copied (16 MiB, 256 handles at most). All processes of a run share
+- shared memory (0.4.0): `memory.create(size)` makes an object (a memfd),
+  `map-at(h, offset, addr, len)` makes a page-aligned range of the caller's own
+  linear memory the object's bytes (mmap `MAP_FIXED` over it), `unmap-at` gives
+  the range its own zeroed pages back. Every process that maps one object sees
+  the same bytes, which is how Ladybird's `AnonymousBuffer` (page bitmaps
+  between WebContent and the UI) works across instances. Memory handles share
+  the endpoints' table: they move in messages, `dup` keeps one of your own,
+  `close` closes them, `is-memory` tells them apart. Objects only grow
+  (`resize` refuses smaller), so a mapping never runs past the end. To find a
+  component's linear memory (the component model does not show the host its
+  core memories), every engine makes its memories through a `MemoryCreator`
+  that notes their base addresses per instance (`procs::capture_memories`),
+  with copy-on-write memory images off.
+
+Each process has its own store and memory; nothing else is shared,
+and messages are copied (16 MiB, 256 handles at most). All processes of a run share
 one engine and its compiled-code cache. In latha-gui, the window's app may use
 latha:proc too: its `tick` runs soon after a message arrives for it (the host's
 thread-safe `wake` callback), so it reads its channels with timeout 0 there.
-`tests/proc-test.sh` (wasi-sdk 27) checks all of it and the two engine
-features.
+`tests/proc-test.sh` (wasi-sdk 27) checks all of it (shared memory with a
+child too) and the two engine features.
 
 Limits: one window per app, no drag and drop, core modules are not wrapped
 into components (perry-gui does that with wasm-tools; build a component).

@@ -5,11 +5,13 @@
 // command that starts copies of itself as processes and talks to them over
 // channels, passes an endpoint along a message, kills a busy child; plus
 // setjmp/longjmp (wasm exceptions) and musttail (wasm tail calls), the two
-// engine features webby's wasm build needs.
+// engine features webby's wasm build needs. Shared memory (latha:proc memory)
+// between two processes, and spawn_env.
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "../../qt2wasm/proc/latha_proc.h"
 
@@ -64,6 +66,30 @@ static int child_spin(void)
         ++x; // until killed
 }
 
+// Shared memory: a memory object comes in a message; check the parent's bytes, write ours, answer.
+static int child_mem(void)
+{
+    uint32_t p, hs[1], len, nh;
+    char buf[8];
+    CHECK(latha_parent(&p) == 0);
+    CHECK(getenv("PROC_TEST") && !strcmp(getenv("PROC_TEST"), "mem")); // spawn_env's environment
+    CHECK(latha_recv(p, buf, sizeof buf, hs, 1, &len, &nh, 5000) == 0 && nh == 1);
+    CHECK(latha_is_memory(hs[0]) == 1 && latha_is_memory(p) == 0);
+    uint64_t size;
+    CHECK(latha_mem_size(hs[0], &size) == 0 && size == 8192);
+    size_t page = (size_t)latha_page_size();
+    char *m = aligned_alloc(page, 8192);
+    CHECK(latha_mem_map(hs[0], 0, m, 8192) == 0);
+    CHECK(!strcmp(m, "parent"));
+    strcpy(m + 4096, "child");
+    CHECK(latha_mem_unmap(m, 8192) == 0);
+    CHECK(m[0] == 0); // our own (zeroed) pages again
+    free(m);
+    CHECK(latha_close(hs[0]) == 0);
+    CHECK(latha_send(p, "done", 4, NULL, 0) == 0);
+    return 0;
+}
+
 static void expect(uint32_t h, const char *want)
 {
     char buf[64];
@@ -81,6 +107,8 @@ int main(int argc, char **argv)
         return child_echo();
     if (argc > 1 && !strcmp(argv[1], "spin"))
         return child_spin();
+    if (argc > 1 && !strcmp(argv[1], "mem"))
+        return child_mem();
 
     uint32_t p;
     CHECK(latha_parent(&p) == LATHA_E_BAD_HANDLE); // started by the host, no parent
@@ -131,6 +159,27 @@ int main(int argc, char **argv)
     CHECK(latha_kill(spid) == 0);
     CHECK(latha_wait_exit(spid, 5000, &code) == 0 && code == 134);
     CHECK(latha_recv(sch, NULL, 0, NULL, 0, &(uint32_t){0}, &(uint32_t){0}, 5000) == LATHA_E_CLOSED);
+
+    // Shared memory with a child (started with its own environment).
+    size_t page = (size_t)latha_page_size();
+    CHECK(page >= 4096 && 8192 % page == 0);
+    uint32_t mh, mh2;
+    CHECK(latha_mem_create(8192, &mh) == 0 && latha_mem_dup(mh, &mh2) == 0);
+    char *m = aligned_alloc(page, 8192);
+    CHECK(latha_mem_map(mh, 0, m, 8192) == 0);
+    CHECK(latha_mem_map(mh, 0, (char *)m + 1, page) == LATHA_E_UNALIGNED);
+    CHECK(latha_mem_resize(mh, 4096) == LATHA_E_FAULT); // never smaller
+    strcpy(m, "parent");
+    static const char mem_args[] = "proc-test\0mem";
+    static const char mem_env[] = "PROC_TEST=mem";
+    uint32_t mpid, mch;
+    CHECK(latha_spawn_env("", 0, mem_args, sizeof mem_args, mem_env, sizeof mem_env, &mpid, &mch) == 0);
+    CHECK(latha_send(mch, "m", 1, &mh2, 1) == 0);
+    expect(mch, "done");
+    CHECK(latha_wait_exit(mpid, 5000, &code) == 0 && code == 0);
+    CHECK(!strcmp(m + 4096, "child"));
+    CHECK(latha_mem_unmap(m, 8192) == 0 && latha_close(mh) == 0);
+    free(m);
 
     // A program that is not there.
     CHECK(latha_spawn("no-such.wasm", 12, NULL, 0, &spid, &sch) == LATHA_E_SPAWN);

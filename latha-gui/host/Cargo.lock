@@ -695,6 +695,7 @@ name = "latha-host"
 version = "0.2.0"
 dependencies = [
  "base64",
+ "libc",
  "sha2",
  "wasmparser",
  "wasmtime",

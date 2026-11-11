@@ -53,9 +53,29 @@ LATHA_PROC_IMPORT("spawn")
 int32_t latha_spawn(const char *path, size_t path_len, const char *args, size_t args_len, uint32_t *pid, uint32_t *h);
 
 // A child's exit code into *code once it ended; LATHA_E_TIMEOUT before that.
+// spawn with env (env_len bytes of NUL-terminated "NAME=value" strings) as the child's whole environment
+// (latha-gui 0.4.0 and later).
+LATHA_PROC_IMPORT("spawn_env")
+int32_t latha_spawn_env(const char *path, size_t path_len, const char *args, size_t args_len, const char *env,
+                        size_t env_len, uint32_t *pid, uint32_t *h);
+
 LATHA_PROC_IMPORT("wait_exit") int32_t latha_wait_exit(uint32_t pid, int32_t timeout_ms, int32_t *code);
 
 LATHA_PROC_IMPORT("kill") int32_t latha_kill(uint32_t pid);
+
+// Shared memory (proc.wit's memory interface; latha-gui 0.4.0 and later). Handles are closed with latha_close and
+// move in messages like endpoints.
+#define LATHA_E_UNALIGNED (-7) // not a multiple of latha_page_size()
+#define LATHA_E_NO_MEMORY (-8)
+LATHA_PROC_IMPORT("mem_create") int32_t latha_mem_create(uint64_t size, uint32_t *h);
+LATHA_PROC_IMPORT("mem_dup") int32_t latha_mem_dup(uint32_t h, uint32_t *out);
+LATHA_PROC_IMPORT("mem_size") int32_t latha_mem_size(uint32_t h, uint64_t *size);
+LATHA_PROC_IMPORT("mem_resize") int32_t latha_mem_resize(uint32_t h, uint64_t size);
+// Our linear memory [addr, addr + len) becomes the object's bytes from offset (all page aligned).
+LATHA_PROC_IMPORT("mem_map") int32_t latha_mem_map(uint32_t h, uint64_t offset, void *addr, size_t len);
+LATHA_PROC_IMPORT("mem_unmap") int32_t latha_mem_unmap(void *addr, size_t len);
+LATHA_PROC_IMPORT("page_size") int32_t latha_page_size(void);
+LATHA_PROC_IMPORT("is_memory") int32_t latha_is_memory(uint32_t h);
 
 #ifdef __cplusplus
 }

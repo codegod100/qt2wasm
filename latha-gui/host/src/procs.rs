@@ -15,16 +15,30 @@
 // for it, so `wait` on several handles sleeps on one Condvar. An Endpoint is
 // closed when its last reference goes: the handle table entry, or the queued
 // message carrying it.
+//
+// Shared memory (the `memory` interface): a memory object is a memfd. A process
+// maps a page-aligned range of its own linear memory onto it with mmap
+// MAP_FIXED, so two instances that map one object see the same bytes, the way
+// Ladybird's AnonymousBuffer shares bitmaps between processes. Its handle lives
+// in the same table as endpoints and moves in messages the same way. To find a
+// component's linear memory (the component model never shows the host a core
+// memory) every engine of a run creates its memories through MemoryCreator,
+// which notes each memory's base for the thread that instantiates it.
 
+use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, OnceLock, Weak};
 use std::time::{Duration, Instant};
 
 use wasmtime::component::{Component, HasSelf, ResourceTable};
 use wasmtime::error::Context as _;
-use wasmtime::{format_err, Caller, Config, Engine, Extern, Linker, Module, Result, Store, UpdateDeadline};
+use wasmtime::{
+    format_err, Caller, Config, Engine, Extern, LinearMemory, Linker, MemoryCreator, MemoryType, Module, Result, Store,
+    UpdateDeadline,
+};
 use wasmtime_wasi::p1::WasiP1Ctx;
 use wasmtime_wasi::{FsPerms, I32Exit, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
@@ -35,6 +49,7 @@ pub mod wit {
     });
 }
 use wit::latha::proc::channels as wch;
+use wit::latha::proc::memory as wmem;
 
 pub const MAX_BYTES: usize = 16 << 20;
 pub const MAX_HANDLES: usize = 256;
@@ -88,9 +103,25 @@ impl Bell {
     }
 }
 
+/// What a handle names.
+#[derive(Clone)]
+enum Obj {
+    Ep(Arc<Endpoint>),
+    Mem(Arc<Shm>),
+}
+
+impl Obj {
+    fn ep(&self) -> Option<&Arc<Endpoint>> {
+        match self {
+            Obj::Ep(e) => Some(e),
+            Obj::Mem(_) => None,
+        }
+    }
+}
+
 struct Msg {
     data: Vec<u8>,
-    handles: Vec<Arc<Endpoint>>,
+    handles: Vec<Obj>,
 }
 
 #[derive(Default)]
@@ -136,6 +167,148 @@ fn new_pair() -> (Arc<Endpoint>, Arc<Endpoint>) {
     let _ = a.peer.set(Arc::downgrade(&b));
     let _ = b.peer.set(Arc::downgrade(&a));
     (a, b)
+}
+
+// --- shared memory ----------------------------------------------------------------------
+
+/// A shared memory object: a memfd of `size` bytes.
+pub struct Shm {
+    fd: OwnedFd,
+    size: Mutex<u64>,
+}
+
+impl Shm {
+    fn new(size: u64) -> std::io::Result<Arc<Shm>> {
+        let fd = unsafe { libc::memfd_create(c"latha-shm".as_ptr(), libc::MFD_CLOEXEC) };
+        if fd < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let fd = unsafe { OwnedFd::from_raw_fd(fd) };
+        if unsafe { libc::ftruncate(fd.as_raw_fd(), size as libc::off_t) } < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(Arc::new(Shm { fd, size: Mutex::new(size) }))
+    }
+    fn resize(&self, size: u64) -> std::io::Result<()> {
+        let mut s = self.size.lock().unwrap();
+        if unsafe { libc::ftruncate(self.fd.as_raw_fd(), size as libc::off_t) } < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        *s = size;
+        Ok(())
+    }
+}
+
+pub fn page_size() -> usize {
+    static P: OnceLock<usize> = OnceLock::new();
+    *P.get_or_init(|| unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize })
+}
+
+/// A linear memory made by [`HostMemories`]: where it is and how big it is now.
+pub struct MemInfo {
+    base: usize,
+    size: AtomicUsize,
+}
+
+thread_local! {
+    /// The memories made on this thread since the last [`capture_memories`] began.
+    static MADE: RefCell<Option<Vec<Arc<MemInfo>>>> = const { RefCell::new(None) };
+}
+
+/// Run `f` (an instantiation) and return what it made with the memories it created.
+pub fn capture_memories<R>(f: impl FnOnce() -> R) -> (R, Vec<Arc<MemInfo>>) {
+    let saved = MADE.with(|m| m.borrow_mut().replace(Vec::new()));
+    let r = f();
+    let made = MADE.with(|m| std::mem::replace(&mut *m.borrow_mut(), saved)).unwrap_or_default();
+    (r, made)
+}
+
+/// Linear memories as one mmap reservation each (never moving), as wasmtime's
+/// own are; only so that the host knows their base addresses.
+struct HostMemories;
+
+struct HostMemory {
+    info: Arc<MemInfo>,
+    reserved: usize,
+    capacity: usize,
+}
+
+unsafe impl LinearMemory for HostMemory {
+    fn byte_size(&self) -> usize {
+        self.info.size.load(Ordering::Relaxed)
+    }
+    fn byte_capacity(&self) -> usize {
+        self.capacity
+    }
+    fn grow_to(&mut self, new_size: usize) -> Result<()> {
+        let old = self.byte_size();
+        if new_size > self.capacity {
+            return Err(format_err!("memory: {new_size} bytes is past the reservation"));
+        }
+        if new_size > old {
+            let p = page_size();
+            let (from, to) = (old.next_multiple_of(p), new_size.next_multiple_of(p));
+            if to > from
+                && unsafe { libc::mprotect((self.info.base + from) as *mut _, to - from, libc::PROT_READ | libc::PROT_WRITE) }
+                    != 0
+            {
+                return Err(std::io::Error::last_os_error().into());
+            }
+        }
+        self.info.size.store(new_size, Ordering::Relaxed);
+        Ok(())
+    }
+    fn as_ptr(&self) -> *mut u8 {
+        self.info.base as *mut u8
+    }
+}
+
+impl Drop for HostMemory {
+    fn drop(&mut self) {
+        unsafe { libc::munmap(self.info.base as *mut _, self.reserved) };
+    }
+}
+
+unsafe impl MemoryCreator for HostMemories {
+    fn new_memory(
+        &self,
+        ty: MemoryType,
+        minimum: usize,
+        maximum: Option<usize>,
+        reserved_size_in_bytes: Option<usize>,
+        guard_size_in_bytes: usize,
+    ) -> Result<Box<dyn LinearMemory>, String> {
+        if ty.is_shared() {
+            return Err("latha: shared wasm memories are not supported".into());
+        }
+        let p = page_size();
+        // A 32-bit memory never needs more than 4 GiB; reserve it all so the base never moves.
+        let full = if ty.is_64() { maximum.unwrap_or(minimum.max(1 << 32)) } else { 1usize << 32 };
+        let capacity = reserved_size_in_bytes.unwrap_or(full).max(minimum).next_multiple_of(p);
+        let reserved = capacity + guard_size_in_bytes.next_multiple_of(p);
+        let base = unsafe {
+            libc::mmap(
+                std::ptr::null_mut(),
+                reserved,
+                libc::PROT_NONE,
+                libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_NORESERVE,
+                -1,
+                0,
+            )
+        };
+        if base == libc::MAP_FAILED {
+            return Err(format!("latha: reserving {reserved} bytes: {}", std::io::Error::last_os_error()));
+        }
+        let info = Arc::new(MemInfo { base: base as usize, size: AtomicUsize::new(0) });
+        let mut m = HostMemory { info: info.clone(), reserved, capacity };
+        m.grow_to(minimum).map_err(|e| format!("{e:?}"))?;
+        MADE.with(|made| {
+            if let Some(v) = &mut *made.borrow_mut() {
+                v.push(info)
+            }
+        });
+        Ok(Box::new(m))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -199,6 +372,10 @@ pub fn base_config() -> Config {
     c.wasm_function_references(true);
     c.wasm_gc(true);
     c.wasm_exceptions(true);
+    // So that latha:proc's memory interface can map shared memory into an instance.
+    c.with_host_memory(Arc::new(HostMemories));
+    // Copy-on-write memory images need wasmtime's own mmap memories.
+    c.memory_init_cow(false);
     c
 }
 
@@ -224,7 +401,7 @@ impl Runtime {
                     None => break,
                 }
             })?;
-        Ok(Arc::new(Runtime { engine, opts, programs: Mutex::new(HashMap::new()), next_pid: AtomicU32::new(1) }))
+        Ok(Arc::new(Runtime { engine, opts, programs: Mutex::new(HashMap::new()), next_pid: AtomicU32::new(100) }))
     }
 
     fn program(&self, path: &Path) -> Result<Program> {
@@ -256,10 +433,10 @@ impl Runtime {
         Ok(p)
     }
 
-    fn wasi(&self, args: &[String]) -> Result<WasiCtxBuilder> {
+    fn wasi(&self, args: &[String], env: &[(String, String)]) -> Result<WasiCtxBuilder> {
         let mut b = WasiCtxBuilder::new();
         b.inherit_stdio().args(args);
-        for (k, v) in &self.opts.env {
+        for (k, v) in env {
             b.env(k, v);
         }
         for (host, guest) in &self.opts.dirs {
@@ -275,7 +452,8 @@ impl Runtime {
     /// its exit code.
     pub fn run_main(self: &Arc<Self>, path: &Path, args: Vec<String>) -> Result<i32> {
         let prog = self.program(path)?;
-        let state = ProcState::new(self.clone(), path.to_path_buf(), None, Arc::new(AtomicBool::new(false)));
+        let mut state = ProcState::new(self.clone(), path.to_path_buf(), None, Arc::new(AtomicBool::new(false)));
+        state.env = self.opts.env.clone();
         let rt = self.clone();
         let t = std::thread::Builder::new()
             .name("latha-main".into())
@@ -322,9 +500,12 @@ impl Runtime {
         wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |h: &mut CoreHost| &mut h.wasi)?;
         add_core_imports(&mut linker, |h: &mut CoreHost| &mut h.proc)?;
         let kill = state.kill.clone();
-        let mut store = Store::new(&self.engine, CoreHost { wasi: self.wasi(args)?.build_p1(), proc: state });
+        let wasi = self.wasi(args, &state.env)?.build_p1();
+        let mut store = Store::new(&self.engine, CoreHost { wasi, proc: state });
         Self::arm_kill(&mut store, kill);
-        let inst = linker.instantiate(&mut store, module)?;
+        let (inst, mems) = capture_memories(|| linker.instantiate(&mut store, module));
+        let inst = inst?;
+        store.data_mut().proc.memories = mems;
         let start = inst
             .get_typed_func::<(), ()>(&mut store, "_start")
             .context("the module has no _start (not a WASI command)")?;
@@ -337,10 +518,13 @@ impl Runtime {
         wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
         add_component_imports(&mut linker, |h: &mut CompHost| &mut h.proc)?;
         let kill = state.kill.clone();
-        let mut store =
-            Store::new(&self.engine, CompHost { wasi: self.wasi(args)?.build(), table: ResourceTable::new(), proc: state });
+        let wasi = self.wasi(args, &state.env)?.build();
+        let mut store = Store::new(&self.engine, CompHost { wasi, table: ResourceTable::new(), proc: state });
         Self::arm_kill(&mut store, kill);
-        let cmd = wasmtime_wasi::p2::bindings::sync::Command::instantiate(&mut store, component, &linker)?;
+        let (cmd, mems) =
+            capture_memories(|| wasmtime_wasi::p2::bindings::sync::Command::instantiate(&mut store, component, &linker));
+        let cmd = cmd?;
+        store.data_mut().proc.memories = mems;
         Ok(match cmd.wasi_cli_run().call_run(&mut store)? {
             Ok(()) => 0,
             Err(()) => 1,
@@ -405,8 +589,12 @@ pub struct ProcState {
     rt: Arc<Runtime>,
     self_path: PathBuf,
     bell: Arc<Bell>,
-    handles: HashMap<u32, Arc<Endpoint>>,
+    handles: HashMap<u32, Obj>,
     next: u32,
+    /// The environment this instance was started with (its children get it too).
+    pub env: Vec<(String, String)>,
+    /// This instance's linear memories (see [`capture_memories`]); the biggest is the program's.
+    pub memories: Vec<Arc<MemInfo>>,
     parent: Option<Arc<Endpoint>>,
     children: HashMap<u32, Arc<Child>>,
     kill: Arc<AtomicBool>,
@@ -420,6 +608,8 @@ impl ProcState {
             bell: Bell::new(),
             handles: HashMap::new(),
             next: 1,
+            env: Vec::new(),
+            memories: Vec::new(),
             parent: None,
             children: HashMap::new(),
             kill,
@@ -434,30 +624,139 @@ impl ProcState {
     /// State for latha-gui's own app (the window's component): `wake` runs,
     /// on any thread, whenever a message arrives for it.
     pub fn for_app(rt: Arc<Runtime>, self_path: PathBuf, wake: Box<dyn Fn() + Send + Sync>) -> ProcState {
-        let s = ProcState::new(rt, self_path, None, Arc::new(AtomicBool::new(false)));
+        let mut s = ProcState::new(rt, self_path, None, Arc::new(AtomicBool::new(false)));
+        s.env = s.rt.opts.env.clone();
         *s.bell.hook.lock().unwrap() = Some(wake);
         s
     }
 
-    fn insert(&mut self, ep: Arc<Endpoint>) -> u32 {
-        *ep.owner.lock().unwrap() = Arc::downgrade(&self.bell);
-        let notify = ep.ready();
-        let h = self.next;
-        self.next = self.next.wrapping_add(1).max(1);
-        self.handles.insert(h, ep);
+    fn insert_obj(&mut self, o: Obj) -> u32 {
+        let notify = match &o {
+            Obj::Ep(ep) => {
+                *ep.owner.lock().unwrap() = Arc::downgrade(&self.bell);
+                ep.ready()
+            }
+            Obj::Mem(_) => false,
+        };
+        let mut h = self.next;
+        while self.handles.contains_key(&h) {
+            h = h.wrapping_add(1).max(1);
+        }
+        self.next = h.wrapping_add(1).max(1);
+        self.handles.insert(h, o);
         if notify {
             self.bell.ring();
         }
         h
     }
 
+    fn insert(&mut self, ep: Arc<Endpoint>) -> u32 {
+        self.insert_obj(Obj::Ep(ep))
+    }
+
     fn get(&self, h: u32) -> Result<Arc<Endpoint>, Error> {
+        self.handles.get(&h).and_then(Obj::ep).cloned().ok_or(Error::BadHandle)
+    }
+
+    fn get_obj(&self, h: u32) -> Result<Obj, Error> {
         self.handles.get(&h).cloned().ok_or(Error::BadHandle)
     }
 
     pub fn pair(&mut self) -> (u32, u32) {
         let (a, b) = new_pair();
         (self.insert(a), self.insert(b))
+    }
+
+    // --- shared memory ---
+
+    fn mem(&self, h: u32) -> Result<Arc<Shm>, MemError> {
+        match self.handles.get(&h) {
+            Some(Obj::Mem(m)) => Ok(m.clone()),
+            _ => Err(MemError::BadHandle),
+        }
+    }
+
+    pub fn mem_create(&mut self, size: u64) -> Result<u32, MemError> {
+        let m = Shm::new(size).map_err(|_| MemError::NoMemory)?;
+        Ok(self.insert_obj(Obj::Mem(m)))
+    }
+
+    pub fn mem_dup(&mut self, h: u32) -> Result<u32, MemError> {
+        let m = self.mem(h)?;
+        Ok(self.insert_obj(Obj::Mem(m)))
+    }
+
+    pub fn mem_size(&mut self, h: u32) -> Result<u64, MemError> {
+        Ok(*self.mem(h)?.size.lock().unwrap())
+    }
+
+    pub fn mem_resize(&mut self, h: u32, size: u64) -> Result<(), MemError> {
+        let m = self.mem(h)?;
+        // Shrinking would make other processes' mappings fault on the host (SIGBUS takes the whole run down).
+        if size < *m.size.lock().unwrap() {
+            return Err(MemError::Fault);
+        }
+        m.resize(size).map_err(|_| MemError::NoMemory)
+    }
+
+    /// The program's linear memory, if [`addr`, `addr` + `len`) is in it.
+    fn linear(&self, addr: u32, len: u32) -> Result<usize, MemError> {
+        let p = page_size();
+        if addr as usize % p != 0 || len as usize % p != 0 || len == 0 {
+            return Err(MemError::Unaligned);
+        }
+        let m = self.memories.iter().max_by_key(|m| m.size.load(Ordering::Relaxed)).ok_or(MemError::Fault)?;
+        if addr as usize + len as usize > m.size.load(Ordering::Relaxed) {
+            return Err(MemError::Fault);
+        }
+        Ok(m.base + addr as usize)
+    }
+
+    pub fn mem_map(&mut self, h: u32, offset: u64, addr: u32, len: u32) -> Result<(), MemError> {
+        let m = self.mem(h)?;
+        if offset % page_size() as u64 != 0 {
+            return Err(MemError::Unaligned);
+        }
+        if offset + len as u64 > (*m.size.lock().unwrap()).next_multiple_of(page_size() as u64) {
+            return Err(MemError::Fault);
+        }
+        let at = self.linear(addr, len)?;
+        let r = unsafe {
+            libc::mmap(
+                at as *mut _,
+                len as usize,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_SHARED | libc::MAP_FIXED,
+                m.fd.as_raw_fd(),
+                offset as libc::off_t,
+            )
+        };
+        if r == libc::MAP_FAILED {
+            return Err(MemError::NoMemory);
+        }
+        Ok(())
+    }
+
+    pub fn mem_unmap(&mut self, addr: u32, len: u32) -> Result<(), MemError> {
+        let at = self.linear(addr, len)?;
+        let r = unsafe {
+            libc::mmap(
+                at as *mut _,
+                len as usize,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_FIXED,
+                -1,
+                0,
+            )
+        };
+        if r == libc::MAP_FAILED {
+            return Err(MemError::NoMemory);
+        }
+        Ok(())
+    }
+
+    pub fn is_memory(&self, h: u32) -> bool {
+        matches!(self.handles.get(&h), Some(Obj::Mem(_)))
     }
 
     pub fn send(&mut self, h: u32, data: Vec<u8>, hs: &[u32]) -> Result<(), Error> {
@@ -467,16 +766,21 @@ impl ProcState {
         let ep = self.get(h)?;
         let peer = ep.peer();
         for (i, x) in hs.iter().enumerate() {
-            let e = self.get(*x)?;
+            let o = self.get_obj(*x)?;
             // Sending an endpoint along itself, or the peer through its own
             // queue, would keep the channel alive for ever.
-            if *x == h || hs[..i].contains(x) || peer.as_ref().is_some_and(|p| Arc::ptr_eq(p, &e)) {
+            if *x == h
+                || hs[..i].contains(x)
+                || o.ep().is_some_and(|e| peer.as_ref().is_some_and(|p| Arc::ptr_eq(p, e)))
+            {
                 return Err(Error::BadHandle);
             }
         }
-        let moved: Vec<Arc<Endpoint>> = hs.iter().filter_map(|x| self.handles.remove(x)).collect();
+        let moved: Vec<Obj> = hs.iter().filter_map(|x| self.handles.remove(x)).collect();
         for m in &moved {
-            *m.owner.lock().unwrap() = Weak::new();
+            if let Obj::Ep(e) = m {
+                *e.owner.lock().unwrap() = Weak::new();
+            }
         }
         let Some(peer) = peer else { return Err(Error::Closed) };
         peer.st.lock().unwrap().queue.push_back(Msg { data, handles: moved });
@@ -504,7 +808,7 @@ impl ProcState {
                     }
                     let m = st.queue.pop_front().unwrap();
                     drop(st);
-                    let hs = m.handles.into_iter().map(|e| self.insert(e)).collect();
+                    let hs = m.handles.into_iter().map(|e| self.insert_obj(e)).collect();
                     return Ok((m.data, hs));
                 }
                 if st.peer_closed {
@@ -518,7 +822,8 @@ impl ProcState {
     }
 
     pub fn wait(&mut self, hs: &[u32], timeout_ms: i32) -> Vec<u32> {
-        let eps: Vec<Option<Arc<Endpoint>>> = hs.iter().map(|h| self.handles.get(h).cloned()).collect();
+        // A memory handle is never ready; a handle that is not ours always is.
+        let eps: Vec<Option<Obj>> = hs.iter().map(|h| self.handles.get(h).cloned()).collect();
         let dl = deadline(timeout_ms);
         loop {
             let gen = self.bell.generation();
@@ -526,7 +831,7 @@ impl ProcState {
             let ready: Vec<u32> = eps
                 .iter()
                 .enumerate()
-                .filter(|(_, e)| e.as_ref().map_or(true, |e| e.ready()))
+                .filter(|(_, e)| e.as_ref().map_or(true, |e| e.ep().is_some_and(|e| e.ready())))
                 .map(|(i, _)| i as u32)
                 .collect();
             if !ready.is_empty() || self.kill.load(Ordering::Relaxed) || !self.bell.sleep(gen, dl) {
@@ -545,6 +850,11 @@ impl ProcState {
     }
 
     pub fn spawn(&mut self, path: &str, args: Vec<String>) -> Result<(u32, u32), String> {
+        let env = self.env.clone();
+        self.spawn_with_env(path, args, env)
+    }
+
+    pub fn spawn_with_env(&mut self, path: &str, args: Vec<String>, env: Vec<(String, String)>) -> Result<(u32, u32), String> {
         let path = if path.is_empty() {
             self.self_path.clone()
         } else {
@@ -558,7 +868,8 @@ impl ProcState {
         let prog = self.rt.program(&path).map_err(|e| format!("{e:?}"))?;
         let (ours, theirs) = new_pair();
         let kill = Arc::new(AtomicBool::new(false));
-        let state = ProcState::new(self.rt.clone(), path.clone(), Some(theirs), kill.clone());
+        let mut state = ProcState::new(self.rt.clone(), path.clone(), Some(theirs), kill.clone());
+        state.env = env;
         let child = Arc::new(Child { exit: Mutex::new(None), cv: Condvar::new(), kill, bell: state.bell.clone() });
         let pid = self.rt.next_pid.fetch_add(1, Ordering::Relaxed);
         let args = if args.is_empty() { vec![path.display().to_string()] } else { args };
@@ -606,6 +917,16 @@ impl ProcState {
     }
 }
 
+/// "NAME=value" entries as pairs (an entry without '=' is a name with an empty value).
+fn split_env<'a>(entries: impl Iterator<Item = &'a str>) -> Vec<(String, String)> {
+    entries
+        .map(|e| match e.split_once('=') {
+            Some((k, v)) => (k.to_string(), v.to_string()),
+            None => (e.to_string(), String::new()),
+        })
+        .collect()
+}
+
 // --- the component interface ----------------------------------------------------------------
 
 fn wit_err(e: Error) -> wch::Error {
@@ -640,9 +961,67 @@ impl wch::Host for ProcState {
     }
 }
 
+/// Errors of the memory interface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemError {
+    BadHandle,
+    Unaligned,
+    Fault,
+    NoMemory,
+}
+
+impl MemError {
+    fn code(self) -> i32 {
+        match self {
+            MemError::BadHandle => Error::BadHandle.code(),
+            MemError::Unaligned => -7,
+            MemError::Fault => E_FAULT,
+            MemError::NoMemory => -8,
+        }
+    }
+    fn wit(self) -> wmem::Error {
+        match self {
+            MemError::BadHandle => wmem::Error::BadHandle,
+            MemError::Unaligned => wmem::Error::Unaligned,
+            MemError::Fault => wmem::Error::Fault,
+            MemError::NoMemory => wmem::Error::NoMemory,
+        }
+    }
+}
+
+impl wmem::Host for ProcState {
+    fn create(&mut self, size: u64) -> Result<u32, wmem::Error> {
+        self.mem_create(size).map_err(MemError::wit)
+    }
+    fn dup(&mut self, h: u32) -> Result<u32, wmem::Error> {
+        self.mem_dup(h).map_err(MemError::wit)
+    }
+    fn size(&mut self, h: u32) -> Result<u64, wmem::Error> {
+        self.mem_size(h).map_err(MemError::wit)
+    }
+    fn resize(&mut self, h: u32, size: u64) -> Result<(), wmem::Error> {
+        self.mem_resize(h, size).map_err(MemError::wit)
+    }
+    fn map_at(&mut self, h: u32, offset: u64, addr: u32, len: u32) -> Result<(), wmem::Error> {
+        self.mem_map(h, offset, addr, len).map_err(MemError::wit)
+    }
+    fn unmap_at(&mut self, addr: u32, len: u32) -> Result<(), wmem::Error> {
+        self.mem_unmap(addr, len).map_err(MemError::wit)
+    }
+    fn page_size(&mut self) -> u32 {
+        page_size() as u32
+    }
+    fn is_memory(&mut self, h: u32) -> bool {
+        ProcState::is_memory(self, h)
+    }
+}
+
 impl wit::latha::proc::process::Host for ProcState {
     fn spawn(&mut self, path: String, args: Vec<String>) -> Result<(u32, u32), String> {
         ProcState::spawn(self, &path, args)
+    }
+    fn spawn_with_env(&mut self, path: String, args: Vec<String>, env: Vec<String>) -> Result<(u32, u32), String> {
+        ProcState::spawn_with_env(self, &path, args, split_env(env.iter().map(String::as_str)))
     }
     fn wait_exit(&mut self, pid: u32, timeout_ms: i32) -> Option<i32> {
         ProcState::wait_exit(self, pid, timeout_ms)
@@ -820,6 +1199,45 @@ pub fn add_core_imports<T: 'static>(linker: &mut Linker<T>, f: fn(&mut T) -> &mu
             }
         },
     )?;
+    linker.func_wrap(
+        M,
+        "spawn_env",
+        move |mut c: Caller<'_, T>,
+              path: u32,
+              plen: u32,
+              args: u32,
+              alen: u32,
+              env: u32,
+              elen: u32,
+              out_pid: u32,
+              out_h: u32|
+              -> i32 {
+            let (Some(p), Some(a), Some(e)) =
+                (read_bytes(&mut c, path, plen), read_bytes(&mut c, args, alen), read_bytes(&mut c, env, elen))
+            else {
+                return E_FAULT;
+            };
+            let p = String::from_utf8_lossy(&p).into_owned();
+            let nul_list = |b: &[u8]| -> Vec<String> {
+                b.split(|x| *x == 0).filter(|s| !s.is_empty()).map(|s| String::from_utf8_lossy(s).into_owned()).collect()
+            };
+            let argv = nul_list(&a);
+            let envv = nul_list(&e);
+            match f(c.data_mut()).spawn_with_env(&p, argv, split_env(envv.iter().map(String::as_str))) {
+                Ok((pid, h)) => {
+                    if write_u32s(&mut c, out_pid, &[pid]) && write_u32s(&mut c, out_h, &[h]) {
+                        0
+                    } else {
+                        E_FAULT
+                    }
+                }
+                Err(e) => {
+                    eprintln!("latha: spawn {p}: {e}");
+                    E_SPAWN
+                }
+            }
+        },
+    )?;
     linker.func_wrap(M, "wait_exit", move |mut c: Caller<'_, T>, pid: u32, timeout_ms: i32, out: u32| -> i32 {
         match f(c.data_mut()).wait_exit(pid, timeout_ms) {
             Some(code) => {
@@ -836,5 +1254,69 @@ pub fn add_core_imports<T: 'static>(linker: &mut Linker<T>, f: fn(&mut T) -> &mu
         f(c.data_mut()).kill(pid);
         0
     })?;
+
+    // shared memory
+    fn note_core_memory<T>(c: &mut Caller<'_, T>, f: fn(&mut T) -> &mut ProcState) {
+        // A core module's memory is its "memory" export (it was made by
+        // HostMemories too, but on whichever thread instantiated it).
+        if let Some(m) = memory(c) {
+            let base = m.data_ptr(&c) as usize;
+            let size = m.data_size(&c);
+            let s = f(c.data_mut());
+            match s.memories.iter().find(|x| x.base == base) {
+                Some(x) => x.size.store(size, Ordering::Relaxed),
+                None => s.memories = vec![Arc::new(MemInfo { base, size: AtomicUsize::new(size) })],
+            }
+        }
+    }
+    linker.func_wrap(M, "mem_create", move |mut c: Caller<'_, T>, size: u64, out: u32| -> i32 {
+        match f(c.data_mut()).mem_create(size) {
+            Ok(h) => {
+                if write_u32s(&mut c, out, &[h]) {
+                    0
+                } else {
+                    E_FAULT
+                }
+            }
+            Err(e) => e.code(),
+        }
+    })?;
+    linker.func_wrap(M, "mem_dup", move |mut c: Caller<'_, T>, h: u32, out: u32| -> i32 {
+        match f(c.data_mut()).mem_dup(h) {
+            Ok(h) => {
+                if write_u32s(&mut c, out, &[h]) {
+                    0
+                } else {
+                    E_FAULT
+                }
+            }
+            Err(e) => e.code(),
+        }
+    })?;
+    linker.func_wrap(M, "mem_size", move |mut c: Caller<'_, T>, h: u32, out: u32| -> i32 {
+        match f(c.data_mut()).mem_size(h) {
+            Ok(n) => {
+                if write_bytes(&mut c, out, &n.to_le_bytes()) {
+                    0
+                } else {
+                    E_FAULT
+                }
+            }
+            Err(e) => e.code(),
+        }
+    })?;
+    linker.func_wrap(M, "mem_resize", move |mut c: Caller<'_, T>, h: u32, size: u64| -> i32 {
+        f(c.data_mut()).mem_resize(h, size).map_or_else(MemError::code, |()| 0)
+    })?;
+    linker.func_wrap(M, "mem_map", move |mut c: Caller<'_, T>, h: u32, offset: u64, addr: u32, len: u32| -> i32 {
+        note_core_memory(&mut c, f);
+        f(c.data_mut()).mem_map(h, offset, addr, len).map_or_else(MemError::code, |()| 0)
+    })?;
+    linker.func_wrap(M, "mem_unmap", move |mut c: Caller<'_, T>, addr: u32, len: u32| -> i32 {
+        note_core_memory(&mut c, f);
+        f(c.data_mut()).mem_unmap(addr, len).map_or_else(MemError::code, |()| 0)
+    })?;
+    linker.func_wrap(M, "page_size", move |_c: Caller<'_, T>| -> i32 { page_size() as i32 })?;
+    linker.func_wrap(M, "is_memory", move |mut c: Caller<'_, T>, h: u32| -> i32 { f(c.data_mut()).is_memory(h) as i32 })?;
     Ok(())
 }

@@ -15,6 +15,7 @@ wasmtime = { version = "50", default-features = false, features = ["component-mo
 wasmtime-wasi = "50"
 base64 = "0.22"
 sha2 = "0.10"
+libc = "0.2"
 wasmparser = { version = "0.261", default-features = false, features = ["std", "component-model"] }
 
 [[bin]]

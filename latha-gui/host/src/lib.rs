@@ -496,7 +496,9 @@ fn load(path: &Path, opts: Option<&LathaOptions>, cb: LathaCallbacks, args: &[St
     let proc = procs::ProcState::for_app(rt, path.to_path_buf(), wake);
     let host = Host { cb, wasi: wasi.build(), table: ResourceTable::new(), proc };
     let mut store = Store::new(&engine, host);
-    let bindings = block_on(GuiPty::instantiate_async(&mut store, &component, &linker))?;
+    let (bindings, mems) = procs::capture_memories(|| block_on(GuiPty::instantiate_async(&mut store, &component, &linker)));
+    let bindings = bindings?;
+    store.data_mut().proc.memories = mems;
     Ok(LathaApp {
         store,
         bindings,
