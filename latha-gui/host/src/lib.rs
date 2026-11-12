@@ -15,8 +15,17 @@
 pub mod procs;
 pub mod prebuilt;
 pub mod update;
+mod audio;
 mod gl;
 mod gl_gen;
+
+/// The `audio` interface (gui/wit/audio.wit), bound on its own like `gl`.
+mod audio_bindings {
+    wasmtime::component::bindgen!({
+        path: "../../qt2wasm/gui/wit",
+        world: "latha:gui/audio-guest",
+    });
+}
 
 /// The `gl` interface (gui/wit/gl.wit), bound on its own so apps without GL do not change.
 mod gl_bindings {
@@ -174,6 +183,7 @@ struct Host {
     table: ResourceTable,
     proc: procs::ProcState,
     gl: gl::GlState,
+    audio: audio::AudioState,
 }
 
 // SAFETY: the store and its callbacks only ever run on the GUI's thread.
@@ -548,6 +558,7 @@ fn load(path: &Path, opts: Option<&LathaOptions>, cb: LathaCallbacks, args: &[St
     GuiPty::add_to_linker::<Host, HasSelf<Host>>(&mut linker, |h| h)?;
     procs::add_component_imports(&mut linker, |h: &mut Host| &mut h.proc)?;
     gl_bindings::latha::gui::gl::add_to_linker::<Host, HasSelf<gl::GlState>>(&mut linker, |h| &mut h.gl)?;
+    audio_bindings::latha::gui::audio::add_to_linker::<Host, HasSelf<audio::AudioState>>(&mut linker, |h| &mut h.audio)?;
     stub_newer_imports(&mut linker, &component, &engine)?;
 
     let mut wasi = WasiCtxBuilder::new();
@@ -575,7 +586,7 @@ fn load(path: &Path, opts: Option<&LathaOptions>, cb: LathaCallbacks, args: &[St
         None => Box::new(|| {}),
     };
     let proc = procs::ProcState::for_app(rt, path.to_path_buf(), wake);
-    let host = Host { cb, wasi: wasi.build(), table: ResourceTable::new(), proc, gl: gl::GlState::default() };
+    let host = Host { cb, wasi: wasi.build(), table: ResourceTable::new(), proc, gl: gl::GlState::default(), audio: audio::AudioState::default() };
     let mut store = Store::new(&engine, host);
     let (bindings, mems) = procs::capture_memories(|| block_on(GuiPty::instantiate_async(&mut store, &component, &linker)));
     let bindings = bindings?;

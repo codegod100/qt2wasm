@@ -377,6 +377,12 @@ pub fn base_config_with(function_cache: bool) -> Config {
     c.wasm_function_references(true);
     c.wasm_gc(true);
     c.wasm_exceptions(true);
+    // The component model's cooperative threads (thread.new-indirect, thread.switch-to, ...): webby runs
+    // Ladybird's worker threads (media decoders and the like) on them. They need wasmtime's concurrency
+    // support, which runs guest threads on fibers (any target that has fibers, aarch64 too).
+    c.wasm_component_model_async(true);
+    c.wasm_component_model_threading(true);
+    c.concurrency_support(true);
     // So that latha:proc's memory interface can map shared memory into an instance.
     c.with_host_memory(Arc::new(HostMemories));
     // Copy-on-write memory images need wasmtime's own mmap memories.

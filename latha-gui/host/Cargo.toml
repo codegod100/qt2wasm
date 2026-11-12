@@ -11,7 +11,7 @@ crate-type = ["staticlib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
-wasmtime = { version = "50", default-features = false, features = ["component-model", "cranelift", "parallel-compilation", "runtime", "std", "addr2line", "demangle", "gc", "gc-drc", "incremental-cache"] }
+wasmtime = { version = "50", default-features = false, features = ["component-model", "component-model-async", "cranelift", "parallel-compilation", "runtime", "std", "addr2line", "demangle", "gc", "gc-drc", "incremental-cache"] }
 wasmtime-wasi = "50"
 base64 = "0.22"
 sha2 = "0.10"

@@ -1,0 +1,25 @@
+package latha:gui@0.2.3;
+
+/// latha:gui's sound output: the app mixes, the host plays. Since latha-gui 0.8 and latha-android 0.4.
+///
+/// The app keeps its own clock (it writes about as fast as the sound plays, a few periods ahead) and the
+/// host keeps a short queue in front of the device: it plays silence when the queue runs dry, and drops
+/// the oldest samples when the queue is longer than a quarter of a second, so a clock that drifts from
+/// the device's never adds up to a delay. A host without a sound device fails `open`.
+interface audio {
+    /// An output of `channels` interleaved channels of 32-bit float samples (-1 to 1) at `sample-rate`
+    /// frames a second. Its id, or why there is none (no sound server, no device).
+    open: func(sample-rate: u32, channels: u8, name: string) -> result<u32, string>;
+    /// Queue whole frames to play after what is queued.
+    write: func(id: u32, samples: list<f32>);
+    /// Drop what is queued and not yet played.
+    flush: func(id: u32);
+    /// Frames queued and not yet handed to the device.
+    queued: func(id: u32) -> u32;
+    close: func(id: u32);
+}
+
+/// Just the sound calls: for a library an app links in (next to its own world, as two sets of bindings).
+world audio-guest {
+    import audio;
+}

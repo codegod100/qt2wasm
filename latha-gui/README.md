@@ -221,6 +221,28 @@ is an offset into a bound buffer stays a number. webby uses it for WebGL.
   rest of the guest side, `host/src/gl.rs` of the host's.
   [`tests/gl-test.sh`](tests/gl-test.sh) draws a triangle and checks it.
 
+## Sound: latha:gui/audio
+
+An app can play sound (0.8.0): the `audio` interface,
+[`../qt2wasm/gui/wit/audio.wit`](../qt2wasm/gui/wit/audio.wit). The app opens
+an output (rate, channels; 32-bit float, interleaved), mixes and writes about
+as fast as it plays; the host keeps a queue of at most 250 ms in front of the
+device, which a thread of its own hands to the device in 10 ms periods:
+PulseAudio's simple API (PipeWire serves it too) on Linux, AAudio in
+latha-android. Both are loaded with dlopen when the app opens its first output,
+so a machine without them still runs apps (`open` fails, and the app plays
+into nothing). `LATHA_GUI_AUDIO=0` turns sound off. webby plays `<video>`,
+`<audio>` and Web Audio through it.
+
+## Threads: component-model threading
+
+Since 0.8.0 the engine has the component model's cooperative threads on
+(`thread.new-indirect`, `thread.suspend-then-resume`, ...; wasmtime's
+component-model-async and threading): an app can start threads that run, one
+at a time, when it switches to them. webby's wasm build runs pthreads on them
+(its `wasm/ui/coop/Coop.cpp`), so Ladybird's media decoders work. An app that
+uses them does not load in latha-gui 0.7 or older.
+
 ## Processes and channels: latha:proc
 
 For multi-process programs (webby: Ladybird's WebContent, RequestServer and
