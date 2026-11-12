@@ -13,6 +13,17 @@
 // row is never copied twice on our side.
 
 pub mod procs;
+mod gl;
+mod gl_gen;
+
+/// The `gl` interface (gui/wit/gl.wit), bound on its own so apps without GL do not change.
+mod gl_bindings {
+    wasmtime::component::bindgen!({
+        path: "../../qt2wasm/gui/wit",
+        world: "latha:gui/gl-guest",
+        additional_derives: [Default],
+    });
+}
 
 use base64::Engine as _;
 use std::ffi::{c_char, c_int, c_void, CStr};
@@ -160,6 +171,7 @@ struct Host {
     wasi: WasiCtx,
     table: ResourceTable,
     proc: procs::ProcState,
+    gl: gl::GlState,
 }
 
 // SAFETY: the store and its callbacks only ever run on the GUI's thread.
@@ -513,10 +525,14 @@ fn load(path: &Path, opts: Option<&LathaOptions>, cb: LathaCallbacks, args: &[St
     wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
     GuiPty::add_to_linker::<Host, HasSelf<Host>>(&mut linker, |h| h)?;
     procs::add_component_imports(&mut linker, |h: &mut Host| &mut h.proc)?;
+    gl_bindings::latha::gui::gl::add_to_linker::<Host, HasSelf<gl::GlState>>(&mut linker, |h| &mut h.gl)?;
     stub_newer_imports(&mut linker, &component, &engine)?;
 
     let mut wasi = WasiCtxBuilder::new();
     wasi.inherit_stdio().args(args);
+    if gl::enabled() {
+        wasi.env(gl::ENV.0, gl::ENV.1);
+    }
     for (k, v) in &ro.env {
         wasi.env(k, v);
     }
@@ -537,7 +553,7 @@ fn load(path: &Path, opts: Option<&LathaOptions>, cb: LathaCallbacks, args: &[St
         None => Box::new(|| {}),
     };
     let proc = procs::ProcState::for_app(rt, path.to_path_buf(), wake);
-    let host = Host { cb, wasi: wasi.build(), table: ResourceTable::new(), proc };
+    let host = Host { cb, wasi: wasi.build(), table: ResourceTable::new(), proc, gl: gl::GlState::default() };
     let mut store = Store::new(&engine, host);
     let (bindings, mems) = procs::capture_memories(|| block_on(GuiPty::instantiate_async(&mut store, &component, &linker)));
     let bindings = bindings?;
@@ -705,7 +721,7 @@ fn buttons(bits: u32) -> wt::Buttons {
 // --- C API -----------------------------------------------------------------------------
 
 /// Our latha:gui version (gui.wit's `package` line).
-const GUI_VERSION: &str = "0.2.2";
+const GUI_VERSION: &str = "0.2.3";
 
 /// Version skew: an app built against a newer latha:gui 0.2.x imports
 /// `latha:gui/host@0.2.N` (or pty), which wasmtime resolves to our 0.2.x
@@ -725,6 +741,7 @@ fn stub_newer_imports(linker: &mut Linker<Host>, component: &Component, engine: 
         let ComponentItem::ComponentInstance(inst) = item.ty else { continue };
         let ours = format!("latha:gui/{iface}@{GUI_VERSION}");
         let mut li = linker.instance(&ours)?;
+        let mut newer = Vec::new();
         for (func, fitem) in inst.exports(engine) {
             if !matches!(fitem.ty, ComponentItem::ComponentFunc(_)) {
                 continue;
@@ -737,8 +754,13 @@ fn stub_newer_imports(linker: &mut Linker<Host>, component: &Component, engine: 
                 })
                 .is_ok()
             {
-                eprintln!("latha-gui: the app imports {name}#{func}, newer than this latha-gui ({GUI_VERSION}): it traps if called");
+                newer.push(func);
             }
+        }
+        // One line per interface: an app may import a whole interface this latha-gui does not have.
+        if !newer.is_empty() {
+            let what = if newer.len() > 4 { format!("{} functions", newer.len()) } else { newer.join(", ") };
+            eprintln!("latha-gui: the app imports {name} ({what}), newer than this latha-gui ({GUI_VERSION}): they trap if called");
         }
     }
     Ok(())

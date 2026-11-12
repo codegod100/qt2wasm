@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from wasmtime import Engine, Store, WasiConfig
 from wasmtime.component import Component, Linker
 
-V = "0.2.2"
+V = "0.2.3"
 HOST, APP = f"latha:gui/host@{V}", f"latha:gui/app@{V}"
 
 

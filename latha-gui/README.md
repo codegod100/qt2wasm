@@ -140,6 +140,34 @@ wasi-sdk's `-mllvm -wasm-enable-sjlj -mllvm -wasm-use-legacy-eh=false
 `musttail`), SIMD and GC types on. Programs get `wasi:sockets` (TCP, UDP,
 name lookup) as a native program would; `LATHA_GUI_NETWORK=0` turns that off.
 
+## GL: latha:gui/gl
+
+An app can draw with the host's GPU (0.5.0): OpenGL ES 3 calls through the
+`gl` interface, [`../qt2wasm/gui/wit/gl.wit`](../qt2wasm/gui/wit/gl.wit)
+(latha:gui 0.2.3). The host makes windowless contexts (`create-context`,
+`make-current`) and runs each call on the current one; names (buffers,
+textures, ...) are the host's, pointers become lists both ways, a pointer that
+is an offset into a bound buffer stays a number. webby uses it for WebGL.
+
+- The host loads EGL and GLES when the app makes its first context:
+  `LATHA_GUI_GL_EGL=/path/libEGL.so` (and `LATHA_GUI_GL_GLES`) for another
+  one, such as ANGLE's; else the system's `libEGL.so.1` / `libGLESv2.so.2`
+  (glvnd, Mesa, NVIDIA), surfaceless where EGL can, else on a 1x1 pbuffer.
+  `LATHA_GUI_GL=0` turns GL off.
+- With ANGLE the host calls its robust entry points (`glTexImage2DRobustANGLE`,
+  ...) and passes the app's context attributes, WebGL validation included.
+  On another driver it calls the plain ones, pads uploads to what the unpack
+  state reads and sizes readbacks and getters itself; shaders then reach the
+  driver as the app wrote them (no WebGL shader validation).
+- The host sets `LATHA_GUI_GL=0.2.3` in the app's environment. An older
+  latha-gui loads such an app but traps on any gl call, so check that first.
+- [`gl/`](gl/): `gen.py` makes gl.wit, the host's `host/src/gl_gen.rs` and
+  the guest's `latha_gles.c` (the GLES C API over wit-bindgen's bindings for
+  the `gl-guest` world) from `gl-functions.json` (Ladybird's WebGL call list
+  plus a few). `latha_gles_custom.c` and `latha_egl.c` are the hand-written
+  rest of the guest side, `host/src/gl.rs` of the host's.
+  [`tests/gl-test.sh`](tests/gl-test.sh) draws a triangle and checks it.
+
 ## Processes and channels: latha:proc
 
 For multi-process programs (webby: Ladybird's WebContent, RequestServer and

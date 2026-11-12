@@ -25,7 +25,7 @@
 /// Coordinates and sizes are device pixels, origin top left. Pixels cross the
 /// boundary base64 encoded in a string: hosts lift a `list<u8>` element by
 /// element, a string in one copy.
-package latha:gui@0.2.2;
+package latha:gui@0.2.3;
 
 interface types {
     /// A rectangle in device pixels.
