@@ -376,6 +376,12 @@ pub fn base_config() -> Config {
     c.with_host_memory(Arc::new(HostMemories));
     // Copy-on-write memory images need wasmtime's own mmap memories.
     c.memory_init_cow(false);
+    // Cranelift's per-function cache: a component that changed in part (a UI composed again with an unchanged
+    // engine component, wac plug) compiles only the functions that changed. The whole-component cache
+    // (load_cached) still answers an unchanged component without compiling at all.
+    if let Some(store) = crate::FunctionCache::open() {
+        let _ = c.enable_incremental_compilation(Arc::new(store));
+    }
     c
 }
 

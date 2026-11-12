@@ -1,6 +1,6 @@
 [package]
 name = "latha-host"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 license = "LGPL-2.1-only OR LGPL-3.0-only"
 description = "latha:gui component host on wasmtime, with a C API for latha-gui"
@@ -11,7 +11,7 @@ crate-type = ["staticlib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
-wasmtime = { version = "50", default-features = false, features = ["component-model", "cranelift", "parallel-compilation", "runtime", "std", "addr2line", "demangle", "gc", "gc-drc"] }
+wasmtime = { version = "50", default-features = false, features = ["component-model", "cranelift", "parallel-compilation", "runtime", "std", "addr2line", "demangle", "gc", "gc-drc", "incremental-cache"] }
 wasmtime-wasi = "50"
 base64 = "0.22"
 sha2 = "0.10"

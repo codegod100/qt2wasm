@@ -329,6 +329,49 @@ fn cache_dir() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache").join("latha-gui"))
 }
 
+/// Compiled functions, one file each under `<cache>/functions/<2 hex>/<rest>`, keyed by the SHA-256 of Cranelift's
+/// key (which covers the function's code and the compiler's settings). Off with the whole cache (LATHA_GUI_CACHE=0;
+/// --no-cache only skips the component cache).
+pub(crate) struct FunctionCache(PathBuf);
+
+impl FunctionCache {
+    pub(crate) fn open() -> Option<FunctionCache> {
+        if std::env::var("LATHA_GUI_CACHE").as_deref() == Ok("0") {
+            return None;
+        }
+        cache_dir().map(|d| FunctionCache(d.join("functions")))
+    }
+
+    fn path(&self, key: &[u8]) -> PathBuf {
+        use sha2::{Digest, Sha256};
+        let hex: String = Sha256::digest(key).iter().map(|b| format!("{b:02x}")).collect();
+        self.0.join(&hex[..2]).join(&hex[2..])
+    }
+}
+
+impl std::fmt::Debug for FunctionCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "FunctionCache({})", self.0.display())
+    }
+}
+
+impl wasmtime::CacheStore for FunctionCache {
+    fn get(&self, key: &[u8]) -> Option<std::borrow::Cow<'_, [u8]>> {
+        std::fs::read(self.path(key)).ok().map(std::borrow::Cow::Owned)
+    }
+
+    fn insert(&self, key: &[u8], value: Vec<u8>) -> bool {
+        let p = self.path(key);
+        let Some(dir) = p.parent() else { return false };
+        if std::fs::create_dir_all(dir).is_err() {
+            return false;
+        }
+        // Written beside it, then renamed: compiler threads (and other latha-gui runs) never read half a file.
+        let tmp = p.with_extension(format!("tmp{}.{:?}", std::process::id(), std::thread::current().id()));
+        std::fs::write(&tmp, value).is_ok() && std::fs::rename(&tmp, &p).is_ok()
+    }
+}
+
 /// Compiled code (a Module or a Component) is cached by (our version, the
 /// engine's settings, the bytes): ~seconds to compile a Qt app, milliseconds
 /// to load it again.

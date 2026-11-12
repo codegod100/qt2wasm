@@ -63,7 +63,7 @@ the desktop entry and `.wasm` files in the file manager use it.
 
 | Part | What |
 | --- | --- |
-| `host/` (Rust) | wasmtime 50 + wasmtime-wasi (preview 2, and preview 1 for commands): loads and instantiates the component (`bindgen!` on `gui-pty`, so plain `gui` apps load too), caches compiled code in `~/.cache/latha-gui`, and has a small C API ([`host/latha_host.h`](host/latha_host.h)). Imports are function pointers into the Qt side. |
+| `host/` (Rust) | wasmtime 50 + wasmtime-wasi (preview 2, and preview 1 for commands): loads and instantiates the component (`bindgen!` on `gui-pty`, so plain `gui` apps load too), caches compiled code in `~/.cache/latha-gui` (whole components, and Cranelift's per-function cache in `functions/`, so a component composed again with one part changed, e.g. a UI plugged into an unchanged engine with `wac plug`, only compiles that part: 197 MB webby composition 35 s cold, 13 s after a UI change), and has a small C API ([`host/latha_host.h`](host/latha_host.h)). Imports are function pointers into the Qt side. |
 | `appmeta.cpp` | the app's id, name and icon (custom sections) |
 | `main.cpp` | arguments, the import callbacks (clipboard, primary selection, title, cursor, bell, quit) |
 | `window.cpp` | the window (a `QWidget`): event loop pump, input mapping, frame copy |
