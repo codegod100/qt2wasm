@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- No action bar; the window is laid out between the system bars. -->
+    <style name="LathaTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar" />
+</resources>

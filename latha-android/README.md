@@ -22,7 +22,8 @@ the app is any component of the **latha:gui** world
 
 The soft keyboard comes up after a tap that leaves the app showing the `text`
 cursor (it does over editable text) and goes away after other taps; the Menu
-key also shows it.
+key also shows it, and a quick three-finger tap toggles it in any app (for
+apps that take keys without a text cursor, like the sketch).
 
 Not there yet: `pty` (spawn fails), the system clipboard (the clipboard is
 in-process), `open-url`, `accent-color`, IME composition beyond dead keys

@@ -206,6 +206,13 @@ struct Runner {
     last_press: Option<(Instant, f32, f32)>,
     clicks: u32,
     buttons: u32,
+    /// when a third finger came down (a quick three-finger tap toggles the keyboard)
+    three: Option<Instant>,
+    /// where the first finger came down; the press is held back until it moves
+    /// past the touch slop or lifts, so a second finger arriving first (scroll,
+    /// three-finger tap) leaves no mark
+    pending: Option<(f32, f32)>,
+    kbd: bool,
     // keys
     accent: Option<char>,
     exit: bool,
@@ -495,6 +502,14 @@ impl Runner {
         self.check(r);
     }
 
+    /// The held-back press of the first finger, at the place it came down.
+    fn press_pending(&mut self) {
+        if let Some((x, y)) = self.pending.take() {
+            self.buttons = 1;
+            self.pointer(0, 1, x, y, self.clicks);
+        }
+    }
+
     /// One finger is the left mouse button; a second finger turns the touch
     /// into a two-finger scroll (the press is let go off-surface, so it does
     /// not click). A mouse's wheel is the wheel.
@@ -518,18 +533,22 @@ impl Runner {
                 self.last_press = Some((now, x, y));
                 self.pointer(3, 0, x, y, 0); // enter
                 self.pointer(2, 0, x, y, 0); // move there first: hover state
-                self.buttons = 1;
-                self.pointer(0, 1, x, y, self.clicks);
+                self.pending = Some((x, y));
             }
             MotionAction::PointerDown => {
                 if self.primary.is_some() && self.two_finger.is_none() {
                     // let go of the press where nothing is: no click
-                    self.buttons = 0;
+                    if self.pending.take().is_none() {
+                        self.buttons = 0;
+                        self.pointer(1, 1, -1e6, -1e6, 0);
+                    }
                     self.pointer(4, 0, -1e6, -1e6, 0);
-                    self.pointer(1, 1, -1e6, -1e6, 0);
                     self.primary = None;
                 }
                 self.two_finger = Some(centroid(ev));
+                if ev.pointer_count() >= 3 && self.three.is_none() {
+                    self.three = Some(Instant::now());
+                }
             }
             MotionAction::Move => {
                 if let Some((cx, cy)) = self.two_finger {
@@ -544,13 +563,31 @@ impl Runner {
                 }
                 if let Some(id) = self.primary {
                     if let Some(p) = ev.pointers().find(|p| p.pointer_id() == id) {
+                        if let Some((px, py)) = self.pending {
+                            let slop = 8.0 * scale_of(&self.android) as f32;
+                            if (p.x() - px).hypot(p.y() - py) < slop {
+                                return;
+                            }
+                            self.press_pending();
+                        }
                         self.pointer(2, 0, p.x(), p.y(), 0);
                     }
                 }
             }
             MotionAction::Up | MotionAction::Cancel => {
+                // a quick three-finger tap toggles the soft keyboard in any app
+                if let Some(t) = self.three.take() {
+                    if ev.action() == MotionAction::Up && t.elapsed() < Duration::from_millis(500) {
+                        self.set_keyboard(!self.kbd);
+                    }
+                }
                 if let Some(id) = self.primary.take() {
                     let p = ev.pointers().find(|p| p.pointer_id() == id).unwrap_or(ev.pointer_at_index(idx));
+                    if ev.action() == MotionAction::Up {
+                        self.press_pending(); // a tap: press now, release below
+                    } else {
+                        self.pending = None; // cancelled before it pressed
+                    }
                     self.buttons = 0;
                     self.pointer(1, 1, p.x(), p.y(), 0);
                     self.pointer(4, 0, p.x(), p.y(), 0);
@@ -592,7 +629,13 @@ impl Runner {
     /// The soft keyboard comes up after a tap that left a text cursor (the
     /// app shows `text` over editable text), and goes away otherwise.
     fn after_tap(&mut self) {
-        if self.shared.cursor.get() == CURSOR_TEXT {
+        let show = self.shared.cursor.get() == CURSOR_TEXT;
+        self.set_keyboard(show);
+    }
+
+    fn set_keyboard(&mut self, show: bool) {
+        self.kbd = show;
+        if show {
             self.android.show_soft_input(true);
         } else {
             self.android.hide_soft_input(true);
@@ -624,6 +667,7 @@ impl Runner {
         }
         if code == Keycode::Menu {
             if pressed {
+                self.kbd = true;
                 self.android.show_soft_input(false);
             }
             return true;
@@ -880,6 +924,9 @@ fn android_main(android: AndroidApp) {
         last_press: None,
         clicks: 0,
         buttons: 0,
+        three: None,
+        pending: None,
+        kbd: false,
         accent: None,
         exit: false,
     };

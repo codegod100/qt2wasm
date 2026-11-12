@@ -39,7 +39,7 @@ target_sdk_version = 35
 [package.metadata.android.application]
 label = "latha"
 icon = "@mipmap/ic_launcher"
-theme = "@android:style/Theme.DeviceDefault.NoActionBar"
+theme = "@style/LathaTheme"
 extract_native_libs = true
 
 [package.metadata.android.application.activity]

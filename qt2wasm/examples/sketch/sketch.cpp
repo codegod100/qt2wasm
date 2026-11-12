@@ -78,7 +78,9 @@ void Sketch::paintEvent(QPaintEvent *) {
     const QString help = QStringLiteral(
         "Drag to draw. Wheel: pen %1 px. Space: color. Ctrl+V pastes, Ctrl+C copies, "
         "Backspace erases, Esc clears, Ctrl+Q quits.").arg(m_pen, 0, 'f', 0);
-    p.drawText(QRectF(16, height() - 64, width() - 32, 48), Qt::TextWordWrap | Qt::AlignBottom, help);
+    // as tall as the wrapped text needs: on a narrow window it is more than 48 px
+    const qreal helpH = p.fontMetrics().boundingRect(QRect(0, 0, qMax(1, width() - 32), 10000), Qt::TextWordWrap, help).height();
+    p.drawText(QRectF(16, height() - 16 - helpH, width() - 32, helpH), Qt::TextWordWrap | Qt::AlignBottom, help);
     f.setPixelSize(28);
     p.setFont(f);
     p.setPen(QColor::fromHsv(m_hue, 160, dark ? 240 : 170));
