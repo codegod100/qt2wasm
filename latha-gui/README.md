@@ -111,7 +111,7 @@ on 4-8 cores; Winch can't do exceptions or GC, and `opt-level=none` only saves 1
 - With no store having it, it compiles here as before, with the bar following Cranelift's functions.
 
 A precompiled file is native code, not sandboxed wasm, so latha-gui only fetches from the stores in
-`LATHA_GUI_PREBUILT_URL` (space separated, default: this repo's `prebuilt` release and webby's `wasm-engine`
+`LATHA_GUI_PREBUILT_URL` (space separated, default: webby's `wasm-engine` release, then this repo's `prebuilt`
 release), never from anything the app names. `LATHA_GUI_PREBUILT=0` turns fetching off. A release makes the
 file with `latha-run --precompile DIR APP.wasm` (or `latha-gui --precompile DIR APP.wasm`) and uploads it;
 `latha-run --prebuilt-name APP.wasm` prints the name a store needs. `host/examples/prepare.rs` times a first

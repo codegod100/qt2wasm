@@ -48,6 +48,8 @@ requirements:
     - pkg-config
   host:
     - qt6-main >=6.8
+    # precompiled apps are .cwasm.zst (host/src/prebuilt.rs), linked dynamically
+    - zstd
   run:
     - qt6-main >=6.8
     # fetches precompiled apps (host/src/prebuilt.rs)

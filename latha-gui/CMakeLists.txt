@@ -21,5 +21,7 @@ endif()
 
 add_executable(latha-gui main.cpp window.cpp window.h accent.cpp accent.h appmeta.cpp appmeta.h icons/icons.qrc latha_pty.cpp latha_pty.h host/latha_host.h)
 target_include_directories(latha-gui PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(latha-gui PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::DBus ${LATHA_HOST_LIB} util dl pthread m)
+# The host links the system libzstd (precompiled apps, host/src/prebuilt.rs); a static library does not carry that.
+find_library(LATHA_ZSTD_LIB zstd REQUIRED)
+target_link_libraries(latha-gui PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::DBus ${LATHA_HOST_LIB} ${LATHA_ZSTD_LIB} util dl pthread m)
 install(TARGETS latha-gui RUNTIME DESTINATION bin)

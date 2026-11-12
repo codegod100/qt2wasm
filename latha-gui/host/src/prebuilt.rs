@@ -31,8 +31,8 @@ pub const STAGE_COMPILE: u32 = 2;
 /// Functions Cranelift started on (FunctionCache::get counts them).
 pub static FUNCTIONS_DONE: AtomicUsize = AtomicUsize::new(0);
 
-const DEFAULT_STORES: &str = "https://fileapi.fastapicloud.dev/api/forge/repos/nandi.uk/qt2wasm/releases/prebuilt/assets/ \
-     https://fileapi.fastapicloud.dev/api/forge/repos/nandi.uk/webby/releases/wasm-engine/assets/";
+const DEFAULT_STORES: &str = "https://fileapi.fastapicloud.dev/api/forge/repos/nandi.uk/webby/releases/wasm-engine/assets/ \
+     https://fileapi.fastapicloud.dev/api/forge/repos/nandi.uk/qt2wasm/releases/prebuilt/assets/";
 
 /// SHA-256 of an app, remembered for the last few byte slices hashed (latha_needs_prepare, latha_prepare and
 /// latha_load each hash the same 200 MB otherwise). Keyed by length and a sample, then checked in full only
