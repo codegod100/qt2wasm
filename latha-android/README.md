@@ -50,6 +50,15 @@ the activity's files dir as `/data`. Compiled code is cached in the files dir,
 so only the first start compiles (a gray screen meanwhile). Logs:
 `adb logcat -s latha`; a dark red screen means it could not start.
 
+### Updates
+
+An app that names its update manifest in its `latha:app` section (`version=`
+and `update=`, see [latha-gui's README](../latha-gui/README.md#app-updates))
+updates itself: after it starts, latha checks the manifest in the background
+(at most every 6 hours), downloads a newer build into the internal files dir
+(`updates/<id>/`) after checking its SHA-256 and id, and runs the newest copy
+from the next start on. The file you opened stays as it is.
+
 ## Get it
 
 ```sh

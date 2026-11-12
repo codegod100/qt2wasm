@@ -8,6 +8,9 @@
 //                  id=   the app id: the Wayland app id / X11 WM_CLASS and the
 //                        desktop file name (id.desktop), e.g. `kwi`
 //                  name= the name shown until the app sets a title
+//                  version=, update= the app's version and the URL of its
+//                        update manifest (host/src/update.rs: latha-gui runs
+//                        and fetches newer builds of it)
 //   latha:icon   one image (PNG, or anything Qt reads: SVG with Qt Svg);
 //                repeat the section for several sizes
 //
@@ -22,6 +25,8 @@
 struct AppMeta {
     QString id;
     QString name;
+    QString version;
+    QString update;
     QList<QByteArray> icons; // image files, as embedded
     bool valid = false;      // the file is wasm
 

@@ -76,6 +76,10 @@ AppMeta readAppMeta(const QString &path)
                     m.id = value;
                 else if (key == "name")
                     m.name = value;
+                else if (key == "version")
+                    m.version = value;
+                else if (key == "update")
+                    m.update = value;
             }
         }
     }

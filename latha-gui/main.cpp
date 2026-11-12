@@ -343,11 +343,12 @@ void usage(FILE *f)
             "  --type-after MS       when to type (default 500)\n"
             "  --debug               paint timings on stderr (LATHA_GUI_DEBUG=1)\n"
             "  --verify              check every scroll move against a full copy (LATHA_GUI_VERIFY=1)\n"
-            "  --app-info            print the app's id, name and icons (latha:app, latha:icon) and exit\n"
+            "  --app-info            print the app's id, name, version and icons (latha:app, latha:icon) and exit\n"
             "  --precompile DIR      compile APP.wasm for a prebuilt store into DIR/<key>.cwasm.zst and exit\n"
             "environment: LATHA_GUI_THEME=dark|light, LATHA_GUI_CACHE=0, LATHA_GUI_CACHE_DIR,\n"
             "  LATHA_GUI_PREBUILT=0 (never fetch a precompiled app), LATHA_GUI_PREBUILT_URL (its stores),\n"
-            "  LATHA_GUI_DESKTOP_ENTRY=0 (do not write ~/.local/share/applications/<app id>.desktop)\n");
+            "  LATHA_GUI_DESKTOP_ENTRY=0 (do not write ~/.local/share/applications/<app id>.desktop),\n"
+            "  LATHA_GUI_UPDATE=0 (no app updates), LATHA_GUI_UPDATE_DIR, LATHA_GUI_UPDATE_INTERVAL (s, default 21600)\n");
 }
 
 } // namespace
@@ -430,7 +431,7 @@ int main(int argc, char **argv)
     }
     if (!opts.screenshot.isEmpty() && opts.quitAfterMs < 0)
         opts.quitAfterMs = 2000;
-    const QByteArray wasmPath = argv[i];
+    QByteArray wasmPath = argv[i];
     if (size.isEmpty()) {
         const QList<QByteArray> p = qgetenv("LATHA_GUI_WINDOW_SIZE").split('x');
         if (p.size() == 2)
@@ -450,10 +451,21 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    // The newest copy of the app: a downloaded update of it (host/src/update.rs) when that is newer than the file
+    // given, which stays the app's name for the desktop entry and the next update check.
+    const QByteArray givenPath = wasmPath;
+    {
+        char *r = latha_update_resolve(givenPath.constData(), nullptr);
+        if (r) {
+            wasmPath = r;
+            latha_string_free(r);
+        }
+    }
+
     // A WASI command (js.wasm, a test runner, ...): run it here, in the
     // terminal, without Qt or a window; the current directory is "." too.
     const int kind = latha_wasm_kind(wasmPath.constData());
-    if (kind == 1 || kind == 2) {
+    if ((kind == 1 || kind == 2) && !appInfo) {
         if (!noRoot && !guestDirs.contains(".")) {
             dirs << ".";
             guestDirs << ".";
@@ -493,8 +505,11 @@ int main(int argc, char **argv)
             return 2;
         }
         QCoreApplication core(argc, argv); // for QImage format plugins (SVG)
-        printf("id: %s\nname: %s\nicons: %lld\n", qPrintable(meta.id), qPrintable(meta.name),
-               (long long)meta.icons.size());
+        printf("id: %s\nname: %s\nversion: %s\nupdate: %s\n", qPrintable(meta.id), qPrintable(meta.name),
+               qPrintable(meta.version), qPrintable(meta.update));
+        if (wasmPath != givenPath)
+            printf("runs: %s (a downloaded update)\n", wasmPath.constData());
+        printf("icons: %lld\n", (long long)meta.icons.size());
         for (const QByteArray &b : meta.icons) {
             const QImage img = QImage::fromData(b);
             if (img.isNull())
@@ -514,7 +529,7 @@ int main(int argc, char **argv)
     // process: give the app its own entry (appmeta.h). Not for test runs.
     const QString platform = QGuiApplication::platformName();
     if ((platform == QLatin1String("wayland") || platform == QLatin1String("xcb")) && opts.screenshot.isEmpty()
-        && qgetenv("LATHA_GUI_DESKTOP_ENTRY") != "0" && installDesktopEntry(meta, QString::fromLocal8Bit(wasmPath))
+        && qgetenv("LATHA_GUI_DESKTOP_ENTRY") != "0" && installDesktopEntry(meta, QString::fromLocal8Bit(givenPath))
         && opts.debug)
         fprintf(stderr, "latha-gui: wrote the desktop entry %s.desktop\n", qPrintable(meta.id));
 
@@ -599,6 +614,23 @@ int main(int argc, char **argv)
     }
     window.resize(size);
     window.show();
+    // Look for a newer build of the app in the background (at most every few hours; update.rs); it runs from the
+    // next start. Not for test runs.
+    if (opts.screenshot.isEmpty() && opts.quitAfterMs < 0 && !meta.update.isEmpty())
+        std::thread([givenPath, debug = opts.debug] {
+            char *version = nullptr, *newPath = nullptr, *uerr = nullptr;
+            const int r = latha_update_check(givenPath.constData(), nullptr, 0, &version, &newPath, &uerr);
+            if (r > 0)
+                fprintf(stderr, "latha-gui: downloaded version %s of the app (%s); it runs from the next start\n",
+                        version, newPath);
+            else if (r < 0)
+                fprintf(stderr, "latha-gui: update check: %s\n", uerr ? uerr : "failed");
+            else if (debug)
+                fprintf(stderr, "latha-gui: no update to download\n");
+            latha_string_free(version);
+            latha_string_free(newPath);
+            latha_string_free(uerr);
+        }).detach();
     const int code = qapp.exec();
     window.finish(code);
     g_window = nullptr;

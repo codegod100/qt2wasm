@@ -8,6 +8,7 @@
 //   latha-run [--dir HOST[::GUEST]]... [--no-root] [--no-cache] [--no-network] APP.wasm [ARGS...]
 //   latha-run --precompile DIR APP.wasm     compile a window app for a prebuilt store (prints the file)
 //   latha-run --prebuilt-name APP.wasm      the file name a prebuilt store keeps APP.wasm under
+//   latha-run --update APP.wasm             check now for a newer build of APP.wasm (update.rs) and download it
 //
 // The whole file system is open as itself (/) and the current directory as
 // ".", unless --no-root.
@@ -57,6 +58,31 @@ fn main() {
                     }
                 }
             }
+            "--update" => {
+                let Some(app) = argv.next() else { usage() };
+                let Some(store) = latha_host::update::default_store() else {
+                    eprintln!("latha-run: no update store (HOME is not set)");
+                    exit(2)
+                };
+                match latha_host::update::check(app.as_ref(), &store, true) {
+                    Ok(latha_host::update::Checked::Updated(v, p)) => {
+                        println!("downloaded {v}: {}", p.display());
+                        exit(0)
+                    }
+                    Ok(latha_host::update::Checked::UpToDate(v)) => {
+                        println!("up to date (newest is {v})");
+                        exit(0)
+                    }
+                    Ok(_) => {
+                        println!("no updates: the app has no id=, version= and update= in its latha:app section");
+                        exit(0)
+                    }
+                    Err(e) => {
+                        eprintln!("latha-run: {e:#}");
+                        exit(2)
+                    }
+                }
+            }
             "--no-root" => root = false,
             "--no-cache" => cache = false,
             "--no-network" => network = false,
@@ -96,6 +122,6 @@ fn main() {
 
 fn usage() -> ! {
     eprintln!("usage: latha-run [--dir HOST[::GUEST]]... [--no-root] [--no-cache] [--no-network] APP.wasm [ARGS...]");
-    eprintln!("       latha-run --precompile DIR APP.wasm | --prebuilt-name APP.wasm");
+    eprintln!("       latha-run --precompile DIR APP.wasm | --prebuilt-name APP.wasm | --update APP.wasm");
     exit(2)
 }

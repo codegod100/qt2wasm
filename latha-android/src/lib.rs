@@ -17,7 +17,9 @@
 // the app from then on; `<external files dir>/app.wasm` if it exists (adb push
 // it to /sdcard/Android/data/uk.nandi.latha/files/app.wasm), else the APK's
 // assets/app.wasm. assets/app.args (one per line, optional) are its args;
-// the first is its name.
+// the first is its name. An app that names its update manifest (latha:app
+// version= and update=, ../latha-gui/host/src/update.rs) gets newer builds
+// into files/updates, and the newest copy runs.
 
 use android_activity::input::{
     InputEvent, KeyAction, KeyEvent, KeyMapChar, Keycode, MetaState, MotionAction, MotionEvent,
@@ -300,7 +302,11 @@ impl Runner {
         let cache = files.join("cache");
         std::env::set_var("LATHA_GUI_CACHE_DIR", &cache);
         std::env::set_var("HOME", "/data");
-        let (path, args) = self.find_app(&files)?;
+        let (given, args) = self.find_app(&files)?;
+        // A newer downloaded build of the app (latha-host update.rs) runs instead; the update check below looks
+        // for the next one.
+        let store = files.join("updates");
+        let path = latha_host::update::resolve(&given, &store);
         log::info!("loading {} {:?}", path.display(), args);
         let home = files.join("home");
         let _ = std::fs::create_dir_all(&home);
@@ -330,6 +336,15 @@ impl Runner {
             }
         }
         self.apply_size();
+        // Look for a newer build of the app (its latha:app version= and update=; at most every few hours); it
+        // runs from the next start.
+        std::thread::spawn(move || match latha_host::update::check(&given, &store, false) {
+            Ok(latha_host::update::Checked::Updated(v, p)) => {
+                log::info!("downloaded version {v} of the app ({}); it runs from the next start", p.display())
+            }
+            Ok(c) => log::info!("update check: {c:?}"),
+            Err(e) => log::warn!("update check: {e:#}"),
+        });
         Ok(())
     }
 

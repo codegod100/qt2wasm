@@ -35,7 +35,7 @@ loads; no WIT import, so any latha-gui runs any app):
 
 | Section | Holds |
 | --- | --- |
-| `latha:app` | UTF-8 `key=value` lines. `id=` is the Wayland app id / X11 `WM_CLASS` and the desktop file name (`id.desktop`), letters, digits, `.`, `-`, `_` (e.g. `kwi`); `name=` is the window title until the app sets one. |
+| `latha:app` | UTF-8 `key=value` lines. `id=` is the Wayland app id / X11 `WM_CLASS` and the desktop file name (`id.desktop`), letters, digits, `.`, `-`, `_` (e.g. `kwi`); `name=` is the window title until the app sets one; `version=` and `update=` are for [updates](#app-updates). |
 | `latha:icon` | one image file (PNG; SVG works where Qt Svg is installed). Repeat the section for several sizes. |
 
 The icon becomes the window icon (xdg-toplevel-icon on Wayland, which Plasma
@@ -55,6 +55,38 @@ menus, `Exec` = latha-gui on that .wasm, `Icon` = the app's icon saved as
 and runs `kbuildsycoca6` so Plasma sees it before the window opens.
 `LATHA_GUI_DESKTOP_ENTRY=0` turns that off; test runs (`--screenshot`,
 offscreen) never write it.
+
+## App updates
+
+An app can update itself through latha-gui (and latha-android), with nothing
+in its WIT: two more `latha:app` keys, `version=` (dot or dash separated
+parts, numbers compared as numbers: `2026.11.12.1730`, `1.4.0-2`) and
+`update=` (the https URL of its update manifest). The manifest is `key=value`
+lines too:
+
+```
+version=2026.11.12.1730
+url=webby.wasm.zst
+sha256=<SHA-256 of the unpacked .wasm>
+```
+
+`url` is absolute or relative to the manifest; a name ending `.zst` is
+zstd and unpacked on the way. Once the window is up, latha-gui checks the
+manifest on a background thread (at most every `LATHA_GUI_UPDATE_INTERVAL`
+seconds, default 6 hours, per app). A newer version is downloaded into
+`~/.local/share/latha-gui/updates/<id>/<version>.wasm` and kept only if its
+SHA-256 matches, it is wasm, and its own `latha:app` has the same `id=` and the
+manifest's `version=`; then its precompiled code is fetched from the prebuilt
+stores when they have it (never compiled in the background). From the next
+start, `latha-gui APP.wasm` runs that copy when it is newer than `APP.wasm`
+(the file you give stays as installed, and a newer package wins over an older
+download); `--app-info` says which it runs. Updates come over https only
+(http to localhost, for tests). `LATHA_GUI_UPDATE=0` turns checking and
+running updates off, `LATHA_GUI_UPDATE_DIR` moves the store, and `latha-run
+--update APP.wasm` checks now. [`tools/set-app-info.py`](tools/set-app-info.py)
+sets the keys in a built `.wasm` (standard-library Python, so a build can copy
+it); [`tests/update.sh`](tests/update.sh) tests it all against a local server.
+The code is [`host/src/update.rs`](host/src/update.rs).
 
 `just install latha-gui` also puts the latha-gui icon into the hicolor theme;
 the desktop entry and `.wasm` files in the file manager use it.
@@ -93,7 +125,7 @@ latha-gui [options] APP.wasm [args...]
   --type TEXT           type TEXT (\n = Return) once the app runs (tests)
   --debug               paint timings on stderr (LATHA_GUI_DEBUG=1)
   --verify              check every scroll move against a full copy (LATHA_GUI_VERIFY=1)
-  --app-info            print the app's id, name and icons (latha:app, latha:icon) and exit
+  --app-info            print the app's id, name, version, update URL and icons (latha:app, latha:icon) and exit
   --precompile DIR      compile APP.wasm for a prebuilt store into DIR/<key>.cwasm.zst and exit
 ```
 

@@ -14,6 +14,7 @@
 
 pub mod procs;
 pub mod prebuilt;
+pub mod update;
 mod gl;
 mod gl_gen;
 
@@ -888,6 +889,75 @@ pub unsafe extern "C" fn latha_precompile(path: *const c_char, dir: *const c_cha
         Err(e) => {
             set_err(err, &format!("{e:#}"));
             std::ptr::null_mut()
+        }
+    }
+}
+
+fn store_or(store: *const c_char) -> Option<PathBuf> {
+    if store.is_null() {
+        update::default_store()
+    } else {
+        Some(PathBuf::from(unsafe { CStr::from_ptr(store) }.to_string_lossy().into_owned()))
+    }
+}
+
+/// Fetch a big component's precompiled code into the cache when a prebuilt store has it (no compiling here), so
+/// a downloaded update starts quickly the first time too.
+fn prefetch(path: &Path) {
+    let Ok(bytes) = std::fs::read(path) else { return };
+    if bytes.len() < (8 << 20) || !matches!(procs::wasm_kind(&bytes), Some(procs::WasmKind::Component)) {
+        return;
+    }
+    let Ok(engine) = Engine::new(&app_config(true)) else { return };
+    if let Some(p) = cache_path(&engine, &bytes) {
+        if !p.exists() {
+            prebuilt::fetch(&bytes, &p, &|_, _, _| {});
+        }
+    }
+}
+
+/// The copy of the app at `path` to run (update.rs): a newer downloaded update of it from the store (NULL: the
+/// default store), else `path` itself. Free with latha_string_free.
+#[no_mangle]
+pub unsafe extern "C" fn latha_update_resolve(path: *const c_char, store: *const c_char) -> *mut c_char {
+    let p = PathBuf::from(CStr::from_ptr(path).to_string_lossy().into_owned());
+    let r = match store_or(store) {
+        Some(s) => update::resolve(&p, &s),
+        None => p,
+    };
+    let mut out: *mut c_char = std::ptr::null_mut();
+    set_err(&mut out, &r.to_string_lossy());
+    out
+}
+
+/// Look for a newer build of the app at `path` (its latha:app version= and update=) and download it into the
+/// store (NULL: the default). Blocking; any thread. Returns 1 when it downloaded one (*version and *new_path set,
+/// free them), 0 when there is nothing to do (no update info, checked recently, up to date), -1 and *err on error.
+#[no_mangle]
+pub unsafe extern "C" fn latha_update_check(
+    path: *const c_char,
+    store: *const c_char,
+    force: c_int,
+    version: *mut *mut c_char,
+    new_path: *mut *mut c_char,
+    err: *mut *mut c_char,
+) -> c_int {
+    let p = PathBuf::from(CStr::from_ptr(path).to_string_lossy().into_owned());
+    let Some(s) = store_or(store) else {
+        set_err(err, "no update store (HOME is not set)");
+        return -1;
+    };
+    match update::check(&p, &s, force != 0) {
+        Ok(update::Checked::Updated(v, np)) => {
+            prefetch(&np);
+            set_err(version, &v);
+            set_err(new_path, &np.to_string_lossy());
+            1
+        }
+        Ok(_) => 0,
+        Err(e) => {
+            set_err(err, &format!("{e:#}"));
+            -1
         }
     }
 }

@@ -25,6 +25,8 @@ wasmparser = { version = "0.261", default-features = false, features = ["std", "
 zstd = { version = "0.13", features = ["zstdmt", "pkg-config"] }
 [target.'cfg(target_os = "android")'.dependencies]
 zstd = { version = "0.13", features = ["zstdmt"] }
+# App updates (update.rs) over https: Android has no curl.
+ureq = { version = "3", default-features = false, features = ["rustls"] }
 
 [[bin]]
 name = "latha-run"

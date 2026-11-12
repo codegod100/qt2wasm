@@ -89,6 +89,14 @@ int latha_prepare(const char *path, int no_cache, LathaProgress progress, void *
 // path (latha_string_free), or NULL and *err.
 char *latha_precompile(const char *path, const char *dir, char **err);
 
+// Updates (src/update.rs): an app whose latha:app section has version= and update=<manifest URL> gets newer
+// builds. latha_update_resolve returns the copy to run: a newer download from the store (NULL: the default,
+// $XDG_DATA_HOME/latha-gui/updates), else PATH (latha_string_free). latha_update_check downloads a newer build
+// (blocking, any thread; at most once per LATHA_GUI_UPDATE_INTERVAL s unless FORCE): 1 downloaded (*version,
+// *new_path), 0 nothing to do, -1 *err. LATHA_GUI_UPDATE=0 turns both off.
+char *latha_update_resolve(const char *path, const char *store);
+int latha_update_check(const char *path, const char *store, int force, char **version, char **new_path, char **err);
+
 LathaApp *latha_load(const char *path, const LathaOptions *opts, const LathaCallbacks *cb,
                      const LathaStr *args, size_t nargs, char **err);
 void latha_free(LathaApp *app);
