@@ -365,6 +365,11 @@ pub struct Runtime {
 /// webby (setjmp/longjmp as wasm exceptions with exnref, musttail as
 /// return_call, SIMD).
 pub fn base_config() -> Config {
+    base_config_with(true)
+}
+
+/// base_config, with Cranelift's per-function cache only if `function_cache` (and the cache is on).
+pub fn base_config_with(function_cache: bool) -> Config {
     let mut c = Config::new();
     c.parallel_compilation(true);
     c.wasm_tail_call(true);
@@ -379,8 +384,10 @@ pub fn base_config() -> Config {
     // Cranelift's per-function cache: a component that changed in part (a UI composed again with an unchanged
     // engine component, wac plug) compiles only the functions that changed. The whole-component cache
     // (load_cached) still answers an unchanged component without compiling at all.
-    if let Some(store) = crate::FunctionCache::open() {
-        let _ = c.enable_incremental_compilation(Arc::new(store));
+    if function_cache {
+        if let Some(store) = crate::FunctionCache::open() {
+            let _ = c.enable_incremental_compilation(Arc::new(store));
+        }
     }
     c
 }

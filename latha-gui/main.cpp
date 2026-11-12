@@ -13,6 +13,16 @@
 #include "window.h"
 
 #include <QApplication>
+#include <QEventLoop>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QProgressBar>
+#include <QTimer>
+#include <QVBoxLayout>
+#include <QWidget>
+#include <atomic>
+#include <unistd.h>
+#include <thread>
 #include <QDesktopServices>
 #include <QProcess>
 #include <QUrl>
@@ -204,6 +214,115 @@ void cbWake(void *)
     }, Qt::QueuedConnection);
 }
 
+// --- first run: a window while the app is fetched precompiled or compiled ---------------
+
+struct PrepareState {
+    std::atomic<int> stage{0};
+    std::atomic<uint64_t> done{0}, total{0};
+};
+
+void cbPrepareProgress(void *user, int stage, uint64_t done, uint64_t total)
+{
+    auto *s = static_cast<PrepareState *>(user);
+    s->stage = stage;
+    s->total = total;
+    s->done = done;
+}
+
+// latha_prepare on a worker thread behind a small window, so the first run of a big app (webby: a 200 MB
+// component, half a minute of Cranelift) shows something at once instead of nothing. Closing the window quits.
+bool prepareWithWindow(const QByteArray &wasmPath, const QString &name, const QIcon &icon, bool debug)
+{
+    QElapsedTimer t;
+    t.start();
+    QWidget w;
+    w.setWindowTitle(name);
+    auto *row = new QHBoxLayout(&w);
+    row->setContentsMargins(20, 18, 20, 18);
+    row->setSpacing(16);
+    auto *iconLabel = new QLabel;
+    if (!icon.isNull())
+        iconLabel->setPixmap(icon.pixmap(48, 48));
+    iconLabel->setAlignment(Qt::AlignTop);
+    row->addWidget(iconLabel);
+    auto *col = new QVBoxLayout;
+    col->setSpacing(8);
+    row->addLayout(col, 1);
+    auto *title = new QLabel(QStringLiteral("Getting %1 ready").arg(name));
+    QFont f = title->font();
+    f.setPointSizeF(f.pointSizeF() * 1.25);
+    f.setBold(true);
+    title->setFont(f);
+    auto *bar = new QProgressBar;
+    bar->setRange(0, 0);
+    bar->setTextVisible(false);
+    auto *detail = new QLabel(QStringLiteral("Only the first time: later starts take a second."));
+    detail->setWordWrap(true);
+    col->addWidget(title);
+    col->addWidget(bar);
+    col->addWidget(detail);
+    w.setMinimumWidth(440);
+    w.show();
+
+    const bool quitOnClose = qApp->quitOnLastWindowClosed();
+    qApp->setQuitOnLastWindowClosed(false);
+    // The worker cannot be stopped half way: closing the window ends the process.
+    const auto closed = QObject::connect(qApp, &QGuiApplication::lastWindowClosed, [] { _exit(0); });
+
+    PrepareState st;
+    int rc = 0;
+    QByteArray err;
+    QEventLoop loop;
+    std::thread worker([&] {
+        char *e = nullptr;
+        rc = latha_prepare(wasmPath.constData(), 0, cbPrepareProgress, &st, &e);
+        if (e) {
+            err = e;
+            latha_string_free(e);
+        }
+        QMetaObject::invokeMethod(&loop, [&loop] { loop.quit(); }, Qt::QueuedConnection);
+    });
+    QTimer timer;
+    QObject::connect(&timer, &QTimer::timeout, [&] {
+        const uint64_t done = st.done, total = st.total;
+        switch (st.stage.load()) {
+        case 1: // downloading (bytes)
+            title->setText(QStringLiteral("Downloading %1").arg(name));
+            detail->setText(total ? QStringLiteral("%1 of %2 MB, compiled ahead of time. Only the first time.")
+                                        .arg(done >> 20).arg(total >> 20)
+                                  : QStringLiteral("%1 MB, compiled ahead of time. Only the first time.")
+                                        .arg(done >> 20));
+            if (total) {
+                bar->setRange(0, 1000);
+                bar->setValue(int(done * 1000 / total));
+            }
+            break;
+        case 2: // compiling (functions)
+            title->setText(QStringLiteral("Compiling %1 for this computer").arg(name));
+            detail->setText(QStringLiteral("Only the first time: later starts take a second."));
+            if (total) {
+                bar->setRange(0, 1000);
+                bar->setValue(int(std::min<uint64_t>(done * 1000 / total, 990)));
+            }
+            break;
+        }
+    });
+    timer.start(100);
+    loop.exec();
+    worker.join();
+    timer.stop();
+    QObject::disconnect(closed);
+    w.hide();
+    qApp->setQuitOnLastWindowClosed(quitOnClose);
+    if (debug)
+        fprintf(stderr, "latha-gui: %s prepared in %lld ms\n", wasmPath.constData(), (long long)t.elapsed());
+    if (rc != 0) {
+        fprintf(stderr, "latha-gui: %s\n", err.isEmpty() ? "cannot compile the app" : err.constData());
+        return false;
+    }
+    return true;
+}
+
 void usage(FILE *f)
 {
     fprintf(f,
@@ -223,7 +342,9 @@ void usage(FILE *f)
             "  --debug               paint timings on stderr (LATHA_GUI_DEBUG=1)\n"
             "  --verify              check every scroll move against a full copy (LATHA_GUI_VERIFY=1)\n"
             "  --app-info            print the app's id, name and icons (latha:app, latha:icon) and exit\n"
+            "  --precompile DIR      compile APP.wasm for a prebuilt store into DIR/<key>.cwasm.zst and exit\n"
             "environment: LATHA_GUI_THEME=dark|light, LATHA_GUI_CACHE=0, LATHA_GUI_CACHE_DIR,\n"
+            "  LATHA_GUI_PREBUILT=0 (never fetch a precompiled app), LATHA_GUI_PREBUILT_URL (its stores),\n"
             "  LATHA_GUI_DESKTOP_ENTRY=0 (do not write ~/.local/share/applications/<app id>.desktop)\n");
 }
 
@@ -240,6 +361,7 @@ int main(int argc, char **argv)
     bool noCache = false;
     bool noRoot = false;
     bool appInfo = false;
+    QByteArray precompileDir;
     int i = 1;
     for (; i < argc; ++i) {
         const char *a = argv[i];
@@ -281,6 +403,8 @@ int main(int argc, char **argv)
             opts.verify = true;
         } else if (!strcmp(a, "--app-info")) {
             appInfo = true;
+        } else if (!strcmp(a, "--precompile")) {
+            precompileDir = next();
         } else if (!strcmp(a, "--")) {
             ++i;
             break;
@@ -309,6 +433,19 @@ int main(int argc, char **argv)
         const QList<QByteArray> p = qgetenv("LATHA_GUI_WINDOW_SIZE").split('x');
         if (p.size() == 2)
             size = QSize(p[0].toInt(), p[1].toInt());
+    }
+
+    if (!precompileDir.isEmpty()) {
+        char *err = nullptr;
+        char *out = latha_precompile(wasmPath.constData(), precompileDir.constData(), &err);
+        if (!out) {
+            fprintf(stderr, "latha-gui: %s\n", err ? err : "cannot compile");
+            latha_string_free(err);
+            return 2;
+        }
+        printf("%s\n", out);
+        latha_string_free(out);
+        return 0;
     }
 
     // A WASI command (js.wasm, a test runner, ...): run it here, in the
@@ -418,6 +555,12 @@ int main(int argc, char **argv)
     cb.pty_close = cbPtyClose;
     cb.wake = cbWake;
     LathaOptions lo{hostDirs.data(), gDirs.data(), hostDirs.size(), noCache ? 1 : 0};
+
+    // First run of a big app: fetch or compile it behind a window that says so, then load it from the cache.
+    if (latha_needs_prepare(wasmPath.constData(), noCache ? 1 : 0)
+        && !prepareWithWindow(wasmPath, meta.name.isEmpty() ? appName : meta.name, QApplication::windowIcon(),
+                              opts.debug))
+        return 2;
 
     QElapsedTimer t;
     t.start();

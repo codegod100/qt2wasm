@@ -79,6 +79,16 @@ int latha_wasm_kind(const char *path);
 // if it could not start.
 int latha_run(const char *path, const LathaOptions *opts, const LathaStr *args, size_t nargs, char **err);
 
+// 1 when loading PATH would compile it first (seconds; no compiled code cached yet), else 0.
+int latha_needs_prepare(const char *path, int no_cache);
+// Compile PATH into the cache, or fetch it precompiled (LATHA_GUI_PREBUILT_URL), so latha_load is quick; any
+// thread. PROGRESS (may be NULL) runs on other threads: stage 1 downloading (bytes), 2 compiling (functions).
+typedef void (*LathaProgress)(void *user, int stage, uint64_t done, uint64_t total);
+int latha_prepare(const char *path, int no_cache, LathaProgress progress, void *user, char **err);
+// Compile PATH for a portable CPU baseline into DIR/<key>.cwasm.zst (a prebuilt store's file); returns that
+// path (latha_string_free), or NULL and *err.
+char *latha_precompile(const char *path, const char *dir, char **err);
+
 LathaApp *latha_load(const char *path, const LathaOptions *opts, const LathaCallbacks *cb,
                      const LathaStr *args, size_t nargs, char **err);
 void latha_free(LathaApp *app);

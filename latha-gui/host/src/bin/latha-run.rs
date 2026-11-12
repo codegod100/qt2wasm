@@ -6,6 +6,8 @@
 // SIMD, wasi:sockets, latha:proc processes and channels.
 //
 //   latha-run [--dir HOST[::GUEST]]... [--no-root] [--no-cache] [--no-network] APP.wasm [ARGS...]
+//   latha-run --precompile DIR APP.wasm     compile a window app for a prebuilt store (prints the file)
+//   latha-run --prebuilt-name APP.wasm      the file name a prebuilt store keeps APP.wasm under
 //
 // The whole file system is open as itself (/) and the current directory as
 // ".", unless --no-root.
@@ -28,6 +30,32 @@ fn main() {
                     None => (d.clone(), d.clone()),
                 };
                 dirs.push((h, g));
+            }
+            "--precompile" => {
+                let (Some(dir), Some(app)) = (argv.next(), argv.next()) else { usage() };
+                match latha_host::prebuilt::precompile(app.as_ref(), dir.as_ref()) {
+                    Ok(p) => {
+                        println!("{}", p.display());
+                        exit(0)
+                    }
+                    Err(e) => {
+                        eprintln!("latha-run: {e:#}");
+                        exit(2)
+                    }
+                }
+            }
+            "--prebuilt-name" => {
+                let Some(app) = argv.next() else { usage() };
+                match std::fs::read(&app).map_err(|e| e.into()).and_then(|b| latha_host::prebuilt::prebuilt_name(&b)) {
+                    Ok(n) => {
+                        println!("{n}");
+                        exit(0)
+                    }
+                    Err(e) => {
+                        eprintln!("latha-run: {app}: {e:#}");
+                        exit(2)
+                    }
+                }
             }
             "--no-root" => root = false,
             "--no-cache" => cache = false,
@@ -68,5 +96,6 @@ fn main() {
 
 fn usage() -> ! {
     eprintln!("usage: latha-run [--dir HOST[::GUEST]]... [--no-root] [--no-cache] [--no-network] APP.wasm [ARGS...]");
+    eprintln!("       latha-run --precompile DIR APP.wasm | --prebuilt-name APP.wasm");
     exit(2)
 }

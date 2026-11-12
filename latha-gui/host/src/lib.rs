@@ -13,6 +13,7 @@
 // row is never copied twice on our side.
 
 pub mod procs;
+pub mod prebuilt;
 mod gl;
 mod gl_gen;
 
@@ -369,6 +370,8 @@ impl std::fmt::Debug for FunctionCache {
 
 impl wasmtime::CacheStore for FunctionCache {
     fn get(&self, key: &[u8]) -> Option<std::borrow::Cow<'_, [u8]>> {
+        // Cranelift asks once per function it compiles: the first-run window's progress bar.
+        prebuilt::FUNCTIONS_DONE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         std::fs::read(self.path(key)).ok().map(std::borrow::Cow::Owned)
     }
 
@@ -387,6 +390,15 @@ impl wasmtime::CacheStore for FunctionCache {
 /// Compiled code (a Module or a Component) is cached by (our version, the
 /// engine's settings, the bytes): ~seconds to compile a Qt app, milliseconds
 /// to load it again.
+/// Where the compiled code for `bytes` lives in the cache: keyed by (our version, the engine's settings, the
+/// bytes' SHA-256). None without a cache.
+pub(crate) fn cache_path(engine: &Engine, bytes: &[u8]) -> Option<PathBuf> {
+    cache_dir().map(|dir| dir.join(format!("{}.cwasm", prebuilt::engine_key(engine, &prebuilt::digest(bytes)))))
+}
+
+/// Compiled code (a Module or a Component) is cached by (our version, the
+/// engine's settings, the bytes): ~seconds to compile a Qt app, milliseconds
+/// to load it again.
 pub(crate) fn load_cached<T>(
     engine: &Engine,
     bytes: &[u8],
@@ -395,34 +407,32 @@ pub(crate) fn load_cached<T>(
     compile: impl Fn(&Engine, &[u8]) -> Result<T>,
     serialize: impl Fn(&T) -> Result<Vec<u8>>,
 ) -> Result<T> {
-    use sha2::{Digest, Sha256};
-    use std::hash::{Hash, Hasher};
-    let cached = if use_cache { cache_dir() } else { None };
-    let path = cached.map(|dir| {
-        struct H<'a>(&'a mut Sha256);
-        impl Hasher for H<'_> {
-            fn finish(&self) -> u64 {
-                0
-            }
-            fn write(&mut self, b: &[u8]) {
-                self.0.update(b)
-            }
-        }
-        let mut h = Sha256::new();
-        h.update(env!("CARGO_PKG_VERSION").as_bytes());
-        engine.precompile_compatibility_hash().hash(&mut H(&mut h));
-        h.update(bytes);
-        let key: String = h.finalize().iter().map(|b| format!("{b:02x}")).collect();
-        dir.join(format!("{key}.cwasm"))
-    });
+    load_cached_or(engine, bytes, use_cache, deserialize, |_| false, compile, serialize)
+}
+
+/// load_cached, with `fetch` asked to put the compiled code at the cache path first (a precompiled download,
+/// prebuilt.rs) before compiling it here.
+pub(crate) fn load_cached_or<T>(
+    engine: &Engine,
+    bytes: &[u8],
+    use_cache: bool,
+    deserialize: impl Fn(&Engine, &Path) -> Result<T>,
+    fetch: impl Fn(&Path) -> bool,
+    compile: impl Fn(&Engine, &[u8]) -> Result<T>,
+    serialize: impl Fn(&T) -> Result<Vec<u8>>,
+) -> Result<T> {
+    let path = if use_cache { cache_path(engine, bytes) } else { None };
     if let Some(p) = &path {
-        if p.exists() {
+        if p.exists() || fetch(p) {
             // `deserialize` is unsafe underneath: we wrote this file with
             // serialize for an engine with the same compatibility hash (it is
-            // in the key).
+            // in the key), or fetched it from a prebuilt store we trust as much as latha-gui itself.
             match deserialize(engine, p) {
                 Ok(c) => return Ok(c),
-                Err(_) => {
+                Err(e) => {
+                    if std::env::var_os("LATHA_GUI_DEBUG").is_some() {
+                        eprintln!("latha-gui: {}: {e:#}; compiling it again", p.display());
+                    }
                     let _ = std::fs::remove_file(p);
                 }
             }
@@ -443,15 +453,39 @@ pub(crate) fn load_cached<T>(
     Ok(compiled)
 }
 
-fn load_component(engine: &Engine, bytes: &[u8], use_cache: bool) -> Result<Component> {
-    load_cached(
+pub(crate) fn load_component(
+    engine: &Engine,
+    bytes: &[u8],
+    use_cache: bool,
+    progress: prebuilt::Progress<'_>,
+) -> Result<Component> {
+    load_cached_or(
         engine,
         bytes,
         use_cache,
         |e, p| unsafe { Component::deserialize_file(e, p) },
-        |e, b| Component::new(e, b),
+        |p| prebuilt::fetch(bytes, p, progress),
+        |e, b| prebuilt::compile_with_progress(b, progress, || Component::new(e, b)),
         |c| c.serialize(),
     )
+}
+
+/// The engine settings a window app compiles with (latha_load, latha_prepare and the precompiled store must agree).
+pub fn app_config(function_cache: bool) -> wasmtime::Config {
+    let mut config = procs::base_config_with(function_cache);
+    config.wasm_component_model(true);
+    // LibWeb and LibJS recurse deeply: the app's calls get the processes'
+    // wasm stack (LATHA_GUI_WASM_STACK_MB to change it). It is the stack of
+    // the fiber each export call runs on (async_stack_size, mapped lazily),
+    // so the GUI thread's own 8 MiB does not limit it and imports still run
+    // on the GUI thread.
+    let stack = std::env::var("LATHA_GUI_WASM_STACK_MB")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .map_or(procs::WASM_STACK, |mb| mb.max(1) << 20);
+    config.async_stack_size(stack + (1 << 20));
+    config.max_wasm_stack(stack);
+    config
 }
 
 /// The directories and environment an app (and every process it starts) gets.
@@ -503,22 +537,9 @@ fn load(path: &Path, opts: Option<&LathaOptions>, cb: LathaCallbacks, args: &[St
             path.display()
         ));
     }
-    let mut config = procs::base_config();
-    config.wasm_component_model(true);
-    // LibWeb and LibJS recurse deeply: the app's calls get the processes'
-    // wasm stack (LATHA_GUI_WASM_STACK_MB to change it). It is the stack of
-    // the fiber each export call runs on (async_stack_size, mapped lazily),
-    // so the GUI thread's own 8 MiB does not limit it and imports still run
-    // on the GUI thread.
-    let stack = std::env::var("LATHA_GUI_WASM_STACK_MB")
-        .ok()
-        .and_then(|v| v.parse::<usize>().ok())
-        .map_or(procs::WASM_STACK, |mb| mb.max(1) << 20);
-    config.async_stack_size(stack + (1 << 20));
-    config.max_wasm_stack(stack);
-    let engine = Engine::new(&config)?;
+    let engine = Engine::new(&app_config(true))?;
     let ro = run_options(opts);
-    let component = load_component(&engine, &bytes, ro.cache)?;
+    let component = load_component(&engine, &bytes, ro.cache, &|_, _, _| {})?;
     let has_pty = imports_pty(&component, &engine);
 
     let mut linker: Linker<Host> = Linker::new(&engine);
@@ -783,6 +804,87 @@ pub unsafe extern "C" fn latha_load(
     let cb = std::ptr::read(cb);
     match load(Path::new(&p), opts.as_ref(), cb, &a) {
         Ok(app) => Box::into_raw(Box::new(app)),
+        Err(e) => {
+            set_err(err, &format!("{e:#}"));
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Progress of latha_prepare: stage 1 downloading (bytes), 2 compiling (functions); from a worker thread.
+pub type LathaProgress = Option<extern "C" fn(user: *mut c_void, stage: c_int, done: u64, total: u64)>;
+
+fn read_app(path: *const c_char) -> Result<(PathBuf, Vec<u8>)> {
+    let p = PathBuf::from(unsafe { CStr::from_ptr(path) }.to_string_lossy().into_owned());
+    let bytes = std::fs::read(&p).with_context(|| format!("reading {}", p.display()))?;
+    Ok((p, bytes))
+}
+
+/// 1 when `path` is a component with no compiled code in the cache yet (latha_load would compile it, or
+/// latha_prepare fetch it: seconds), 0 when loading it is quick (cached, small, no cache, or not a component).
+#[no_mangle]
+pub unsafe extern "C" fn latha_needs_prepare(path: *const c_char, no_cache: c_int) -> c_int {
+    if no_cache != 0 || std::env::var("LATHA_GUI_CACHE").as_deref() == Ok("0") {
+        return 0;
+    }
+    let Ok((_, bytes)) = read_app(path) else { return 0 };
+    if bytes.len() < (8 << 20) || !matches!(procs::wasm_kind(&bytes), Some(procs::WasmKind::Component)) {
+        return 0;
+    }
+    let Ok(engine) = Engine::new(&app_config(true)) else { return 0 };
+    match cache_path(&engine, &bytes) {
+        Some(p) if !p.exists() => 1,
+        _ => 0,
+    }
+}
+
+/// Compile `path` into the cache (or fetch it precompiled), so that latha_load then only loads it. Safe on any
+/// thread; `progress` is called on others too. 0 or -1 (and *err).
+#[no_mangle]
+pub unsafe extern "C" fn latha_prepare(
+    path: *const c_char,
+    no_cache: c_int,
+    progress: LathaProgress,
+    user: *mut c_void,
+    err: *mut *mut c_char,
+) -> c_int {
+    struct User(*mut c_void);
+    unsafe impl Send for User {}
+    unsafe impl Sync for User {}
+    let u = User(user);
+    let report = move |stage: u32, done: u64, total: u64| {
+        if let Some(f) = progress {
+            let u = &u;
+            f(u.0, stage as c_int, done, total)
+        }
+    };
+    let res = (|| -> Result<()> {
+        let (_, bytes) = read_app(path)?;
+        let engine = Engine::new(&app_config(true))?;
+        load_component(&engine, &bytes, no_cache == 0, &report)?;
+        Ok(())
+    })();
+    match res {
+        Ok(()) => 0,
+        Err(e) => {
+            set_err(err, &format!("{e:#}"));
+            -1
+        }
+    }
+}
+
+/// Compile `path` for a portable CPU baseline into DIR/<key>.cwasm.zst, for a prebuilt store (prebuilt.rs).
+/// Returns the file's path (free with latha_string_free), or NULL and *err.
+#[no_mangle]
+pub unsafe extern "C" fn latha_precompile(path: *const c_char, dir: *const c_char, err: *mut *mut c_char) -> *mut c_char {
+    let p = CStr::from_ptr(path).to_string_lossy().into_owned();
+    let d = CStr::from_ptr(dir).to_string_lossy().into_owned();
+    match prebuilt::precompile(Path::new(&p), Path::new(&d)) {
+        Ok(out) => {
+            let mut s: *mut c_char = std::ptr::null_mut();
+            set_err(&mut s, &out.to_string_lossy());
+            s
+        }
         Err(e) => {
             set_err(err, &format!("{e:#}"));
             std::ptr::null_mut()

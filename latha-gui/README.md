@@ -94,9 +94,30 @@ latha-gui [options] APP.wasm [args...]
   --debug               paint timings on stderr (LATHA_GUI_DEBUG=1)
   --verify              check every scroll move against a full copy (LATHA_GUI_VERIFY=1)
   --app-info            print the app's id, name and icons (latha:app, latha:icon) and exit
+  --precompile DIR      compile APP.wasm for a prebuilt store into DIR/<key>.cwasm.zst and exit
 ```
 
-Environment: `LATHA_GUI_THEME=dark|light` (else the desktop's color scheme,
+### First run of a big app
+
+Compiling a big component takes Cranelift a while the first time (webby.wasm, 200 MB: 165 s of CPU, 35-50 s
+on 4-8 cores; Winch can't do exceptions or GC, and `opt-level=none` only saves 10%). So the first run:
+
+- shows a small window at once ("Getting webby ready", a progress bar; closing it quits), and
+- asks the prebuilt stores for the app compiled ahead of time: `<key>.cwasm.zst` (webby: 84 MB, about a second
+  on a fast link, then it loads from `~/.cache/latha-gui` in 0.02 s like any cached app). The key is
+  (latha-host's version, the portable engine's settings, the app's SHA-256), so a file only ever matches those
+  exact bytes and a latha-gui with the same wasmtime and settings. It is compiled for x86-64-v3 (AVX2, BMI2,
+  FMA; Haswell and later); a CPU without those fails wasmtime's check and the app is compiled here instead.
+- With no store having it, it compiles here as before, with the bar following Cranelift's functions.
+
+A precompiled file is native code, not sandboxed wasm, so latha-gui only fetches from the stores in
+`LATHA_GUI_PREBUILT_URL` (space separated, default: this repo's `prebuilt` release and webby's `wasm-engine`
+release), never from anything the app names. `LATHA_GUI_PREBUILT=0` turns fetching off. A release makes the
+file with `latha-run --precompile DIR APP.wasm` (or `latha-gui --precompile DIR APP.wasm`) and uploads it;
+`latha-run --prebuilt-name APP.wasm` prints the name a store needs. `host/examples/prepare.rs` times a first
+run (`LATHA_GUI_CACHE_DIR=$(mktemp -d) cargo run --release --example prepare APP.wasm`).
+
+Environment: `LATHA_GUI_PREBUILT=0`, `LATHA_GUI_PREBUILT_URL` (above), `LATHA_GUI_THEME=dark|light` (else the desktop's color scheme,
 followed live), `LATHA_GUI_ACCENT=#rrggbb|none` (else the desktop's accent
 color for `host.accent-color`: the XDG portal's `org.freedesktop.appearance
 accent-color`, then KDE's `kdeglobals` AccentColor / selection color, both

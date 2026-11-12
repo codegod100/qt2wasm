@@ -6,7 +6,7 @@
 #
 #   rattler-build build -r recipes/latha-gui -c conda-forge -c https://prefix.dev/nandi-testing
 context:
-  version: "0.5.0"
+  version: "0.6.0"
 
 package:
   name: latha-gui
@@ -50,6 +50,8 @@ requirements:
     - qt6-main >=6.8
   run:
     - qt6-main >=6.8
+    # fetches precompiled apps (host/src/prebuilt.rs)
+    - curl
 
 tests:
   - script:
