@@ -12,8 +12,10 @@
 // host's imports are callbacks into `Shared` below, and the loop (`pump`)
 // mirrors latha-gui's window.cpp: tick when due, paint at most every 16 ms.
 //
-// Which app: `<external files dir>/app.wasm` if it exists (adb push it to
-// /sdcard/Android/data/uk.nandi.latha/files/app.wasm), else the APK's
+// Which app: a wasm file latha was opened with ("Open with" / "Share", see
+// `opened_file`) is copied to `<external files dir>/app.wasm` and so becomes
+// the app from then on; `<external files dir>/app.wasm` if it exists (adb push
+// it to /sdcard/Android/data/uk.nandi.latha/files/app.wasm), else the APK's
 // assets/app.wasm. assets/app.args (one per line, optional) are its args;
 // the first is its name.
 
@@ -344,6 +346,11 @@ impl Runner {
             .unwrap_or_default();
         if let Some(ext) = self.android.external_data_path() {
             let p = ext.join("app.wasm");
+            match opened_file(&self.android, &p) {
+                Ok(true) => log::info!("opened with a wasm file: now {}", p.display()),
+                Ok(false) => {}
+                Err(e) => return Err(format!("the file latha was opened with: {e}")),
+            }
             if p.is_file() {
                 return Ok((p, vec!["app".into()]));
             }
@@ -886,6 +893,110 @@ fn special_keysym(k: Keycode) -> u32 {
         Keycode::F11 => 0xffc8,
         Keycode::F12 => 0xffc9,
         _ => 0,
+    }
+}
+
+// --- "Open with" -------------------------------------------------------------------
+
+/// If the activity was started with a file (ACTION_VIEW's data, or
+/// ACTION_SEND's EXTRA_STREAM), copy it to `dest` through the ContentResolver
+/// (content:// and file:// alike) and say so. Not a wasm module (no `\0asm`
+/// magic): an error, and `dest` is left as it was. The intent is then cleared,
+/// so a recreated activity does not copy it again.
+///
+/// NativeActivity has no onNewIntent, so this is only seen at a cold start: a
+/// latha already running keeps its app (leave it with Back, then open again).
+fn opened_file(android: &AndroidApp, dest: &Path) -> Result<bool, String> {
+    use jni::objects::{JObject, JString, JValue};
+    let vm = unsafe { jni::JavaVM::from_raw(android.vm_as_ptr() as *mut jni::sys::JavaVM) }.map_err(|e| e.to_string())?;
+    let mut env = vm.attach_current_thread().map_err(|e| e.to_string())?;
+    let act = unsafe { JObject::from_raw(android.activity_as_ptr() as jni::sys::jobject) };
+    let r = (|| -> jni::errors::Result<Option<String>> {
+        let intent = env.call_method(&act, "getIntent", "()Landroid/content/Intent;", &[])?.l()?;
+        if intent.is_null() {
+            return Ok(None);
+        }
+        let action = env.call_method(&intent, "getAction", "()Ljava/lang/String;", &[])?.l()?;
+        let action: String = if action.is_null() { String::new() } else { env.get_string(&JString::from(action))?.into() };
+        let uri = match action.as_str() {
+            "android.intent.action.VIEW" => env.call_method(&intent, "getData", "()Landroid/net/Uri;", &[])?.l()?,
+            "android.intent.action.SEND" => {
+                let k = env.new_string("android.intent.extra.STREAM")?;
+                env.call_method(&intent, "getParcelableExtra", "(Ljava/lang/String;)Landroid/os/Parcelable;", &[JValue::Object(&k)])?
+                    .l()?
+            }
+            _ => JObject::null(),
+        };
+        if uri.is_null() {
+            return Ok(None);
+        }
+        let shown = env.call_method(&uri, "toString", "()Ljava/lang/String;", &[])?.l()?;
+        let shown: String = env.get_string(&JString::from(shown))?.into();
+        log::info!("opened with {action} {shown}");
+        let resolver = env.call_method(&act, "getContentResolver", "()Landroid/content/ContentResolver;", &[])?.l()?;
+        let input = env
+            .call_method(&resolver, "openInputStream", "(Landroid/net/Uri;)Ljava/io/InputStream;", &[JValue::Object(&uri)])?
+            .l()?;
+        // Copy beside dest, check, then rename over it.
+        let tmp = dest.with_extension("wasm.part");
+        let mut out = match std::fs::File::create(&tmp) {
+            Ok(f) => f,
+            Err(e) => return Ok(Some(format!("{}: {e}", tmp.display()))),
+        };
+        let jbuf = env.new_byte_array(1 << 20)?;
+        let mut buf = vec![0i8; 1 << 20];
+        let mut head = Vec::new();
+        let mut total = 0usize;
+        let mut io_err = None;
+        loop {
+            let n = env.call_method(&input, "read", "([B)I", &[JValue::Object(&jbuf)])?.i()?;
+            if n < 0 {
+                break;
+            }
+            let n = n as usize;
+            env.get_byte_array_region(&jbuf, 0, &mut buf[..n])?;
+            let bytes = unsafe { std::slice::from_raw_parts(buf.as_ptr() as *const u8, n) };
+            if head.len() < 8 {
+                head.extend_from_slice(&bytes[..n.min(8 - head.len())]);
+            }
+            if let Err(e) = std::io::Write::write_all(&mut out, bytes) {
+                io_err = Some(e);
+                break;
+            }
+            total += n;
+        }
+        env.call_method(&input, "close", "()V", &[])?;
+        // Seen: don't copy it again if the activity is recreated.
+        let empty = env.new_object("android/content/Intent", "()V", &[])?;
+        env.call_method(&act, "setIntent", "(Landroid/content/Intent;)V", &[JValue::Object(&empty)])?;
+        drop(out);
+        let err = if let Some(e) = io_err {
+            Some(format!("{}: {e}", tmp.display()))
+        } else if !head.starts_with(b"\0asm") {
+            Some(format!("{shown} is not a wasm file"))
+        } else {
+            std::fs::rename(&tmp, dest).err().map(|e| format!("{}: {e}", dest.display()))
+        };
+        let _ = std::fs::remove_file(&tmp);
+        match err {
+            Some(e) => Ok(Some(e)),
+            None => {
+                log::info!("copied {total} bytes");
+                Ok(Some(String::new()))
+            }
+        }
+    })();
+    match r {
+        Ok(None) => Ok(false),
+        Ok(Some(e)) if e.is_empty() => Ok(true),
+        Ok(Some(e)) => Err(e),
+        Err(e) => {
+            if env.exception_check().unwrap_or(false) {
+                let _ = env.exception_describe();
+                let _ = env.exception_clear();
+            }
+            Err(format!("JNI: {e}"))
+        }
     }
 }
 

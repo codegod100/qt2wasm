@@ -1,6 +1,6 @@
 [package]
 name = "latha-android"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "LGPL-2.1-only OR LGPL-3.0-only"
 publish = false
@@ -15,6 +15,7 @@ android-activity = { version = "0.6", features = ["native-activity"] }
 ndk = "0.9"
 log = "0.4"
 android_logger = "0.14"
+jni = "0.21"
 
 [profile.release]
 opt-level = 3
@@ -46,6 +47,19 @@ extract_native_libs = true
 config_changes = "orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
 launch_mode = "singleTask"
 orientation = "unspecified"
+
+# "Open with latha" / "Share to latha" for wasm files: the launch's file becomes
+# the app (src/lib.rs, opened_file). Content URIs often carry no extension and
+# file managers often call .wasm application/octet-stream, so take both and
+# check the wasm magic before running it.
+[[package.metadata.android.application.activity.intent_filter]]
+actions = ["android.intent.action.MAIN"]
+categories = ["android.intent.category.LAUNCHER"]
+
+[[package.metadata.android.application.activity.intent_filter]]
+actions = ["android.intent.action.VIEW", "android.intent.action.SEND"]
+categories = ["android.intent.category.DEFAULT"]
+data = [{ mime_type = "application/wasm" }, { mime_type = "application/octet-stream" }]
 
 [[package.metadata.android.uses_permission]]
 name = "android.permission.INTERNET"

@@ -33,7 +33,16 @@ installing a newer APK).
 
 ## Which app
 
-`/sdcard/Android/data/uk.nandi.latha/files/app.wasm` if it is there
+Open a latha:gui `.wasm` file with latha (a file manager's "Open with", a
+downloaded file, or "Share" to latha): it is copied to
+`/sdcard/Android/data/uk.nandi.latha/files/app.wasm` and runs, and stays the
+app for later starts until another file replaces it. latha checks the wasm
+magic first (file managers often label `.wasm` as `application/octet-stream`,
+so latha is offered for those too), and a file that is not wasm gives the dark
+red screen. Android only hands the file over at a cold start: if latha is
+already running, leave it with Back first.
+
+Otherwise `/sdcard/Android/data/uk.nandi.latha/files/app.wasm` if it is there
 (`adb push my-app.wasm /sdcard/Android/data/uk.nandi.latha/files/app.wasm`),
 else the APK's `assets/app.wasm` (the published APK bundles qt2wasm's sketch
 example), with `assets/app.args` (one per line, the name first). The app sees

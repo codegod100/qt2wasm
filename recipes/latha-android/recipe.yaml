@@ -11,7 +11,7 @@
 # publish-latha-android forge job (ci/publish.py latha-android); bump
 # `version` or the build number to publish again.
 context:
-  version: "0.1.0"
+  version: "0.2.0"
   rust: "1.97.0"
   ndk: r29
 

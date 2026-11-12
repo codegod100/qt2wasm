@@ -16,11 +16,15 @@ wasmtime-wasi = "50"
 base64 = "0.22"
 sha2 = "0.10"
 libc = "0.2"
-# The system libzstd (pkg-config), not a static copy: Qt links libzstd too, and the static one's hidden
-# symbols clash with it at link time.
-zstd = { version = "0.13", features = ["zstdmt", "pkg-config"] }
 target-lexicon = "0.13"
 wasmparser = { version = "0.261", default-features = false, features = ["std", "component-model"] }
+
+# The system libzstd (pkg-config), not a static copy: Qt links libzstd too, and the static one's hidden
+# symbols clash with it at link time. Android (latha-android) has no Qt and no pkg-config: the static copy.
+[target.'cfg(not(target_os = "android"))'.dependencies]
+zstd = { version = "0.13", features = ["zstdmt", "pkg-config"] }
+[target.'cfg(target_os = "android")'.dependencies]
+zstd = { version = "0.13", features = ["zstdmt"] }
 
 [[bin]]
 name = "latha-run"
