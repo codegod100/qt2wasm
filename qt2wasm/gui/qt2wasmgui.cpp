@@ -18,6 +18,9 @@
 // component's event dispatcher never blocks and has no window system queue.
 #include "qt2wasmgui.h"
 
+#include <cstring>
+#include <vector>
+
 #include <qt2wasm/gui.h>
 #include <qt2wasm/runtime.h>
 #include "wasieventdispatcher.h"
@@ -125,6 +128,8 @@ struct State {
     GuiScreen *screen = nullptr;
     QList<GuiWindow *> stack;  // visible top-levels, bottom to top
     QImage frame;              // device pixels, ARGB32_Premultiplied
+    bool frameFresh = true;    // frame (re)made: the host has none of it yet, send all damage as is
+    std::vector<uint32_t> before;  // paint(): the damaged pixels as the host shows them, to send only changes
     QRegion damage;            // device pixels, waiting for paint()
     QList<latha_gui_types_move_t> moves;  // frame moves, waiting for paint()
     bool frameRequested = false;
@@ -760,6 +765,69 @@ void ensureFrame() {
     S.frame.fill(Qt::black);
     S.damage = QRect(QPoint(), S.device);
     S.moves.clear();
+    S.frameFresh = true;
+}
+
+// The damaged pixels as they are now (S.frame is what the host shows, moves included), before compose().
+void keepBefore(const QList<QRect> &rects) {
+    size_t n = 0;
+    for (const QRect &r : rects)
+        n += size_t(r.width()) * r.height();
+    S.before.resize(n);
+    uint32_t *out = S.before.data();
+    for (const QRect &r : rects)
+        for (int y = r.top(); y <= r.bottom(); ++y, out += r.width())
+            std::memcpy(out, reinterpret_cast<const uint32_t *>(S.frame.constScanLine(y)) + r.x(), size_t(r.width()) * 4);
+}
+
+// What compose() really changed inside `rects` (kept by keepBefore): an app repaints whole windows for a small
+// change (a caret, a hovered button), and every pixel sent costs a copy and base64 both sides. Each rect is cut
+// into bands of rows; a band that changed becomes the columns that changed in it, and bands next to each other
+// with overlapping columns join.
+QRegion changedIn(const QList<QRect> &rects) {
+    constexpr int band = 16;
+    QRegion changed;
+    const uint32_t *old = S.before.data();
+    for (const QRect &r : rects) {
+        const int w = r.width();
+        QRect run;  // the open band group
+        for (int y0 = r.top(); y0 <= r.bottom(); y0 += band) {
+            const int y1 = qMin(y0 + band - 1, r.bottom());
+            int x0 = w, x1 = -1;
+            for (int y = y0; y <= y1; ++y) {
+                const uint32_t *now = reinterpret_cast<const uint32_t *>(S.frame.constScanLine(y)) + r.x();
+                const uint32_t *was = old + size_t(y - r.top()) * w;
+                if (std::memcmp(now, was, size_t(w) * 4) == 0)
+                    continue;
+                int a = 0;
+                while (a < x0 && now[a] == was[a])
+                    ++a;
+                int b = w - 1;
+                while (b > x1 && now[b] == was[b])
+                    --b;
+                x0 = qMin(x0, a);
+                x1 = qMax(x1, b);
+            }
+            if (x1 < 0) {
+                if (!run.isEmpty())
+                    changed += run;
+                run = {};
+                continue;
+            }
+            const QRect got(r.x() + x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+            if (!run.isEmpty() && run.left() <= got.right() && got.left() <= run.right()) {
+                run = run.united(got);
+            } else {
+                if (!run.isEmpty())
+                    changed += run;
+                run = got;
+            }
+        }
+        if (!run.isEmpty())
+            changed += run;
+        old += size_t(w) * r.height();
+    }
+    return changed;
 }
 
 void compose(const QRegion &region) {
@@ -1172,11 +1240,21 @@ void exports_latha_gui_app_paint(exports_latha_gui_app_damage_t *ret) {
     }
     if (damage.isEmpty())
         return;
+    // Send only the pixels that changed (LATHA_GUI_DIFF=0: all the damage, as the app reported it).
+    static const bool diff = qEnvironmentVariable("LATHA_GUI_DIFF") != QLatin1String("0");
+    const bool fresh = S.frameFresh;
+    S.frameFresh = false;
+    const QList<QRect> damaged(damage.begin(), damage.end());
+    if (diff && !fresh)
+        keepBefore(damaged);
     compose(damage);
+    const QRegion send = diff && !fresh ? changedIn(damaged) : damage;
+    if (send.isEmpty())
+        return;
     // Many small rects cost a call each on the host: past 16, send the bounds.
-    QList<QRect> rects(damage.begin(), damage.end());
+    QList<QRect> rects(send.begin(), send.end());
     if (rects.size() > 16)
-        rects = {damage.boundingRect()};
+        rects = {send.boundingRect()};
     ret->rects.len = size_t(rects.size());
     ret->rects.ptr = static_cast<latha_gui_types_rect_t *>(std::malloc(sizeof(latha_gui_types_rect_t) * rects.size()));
     for (qsizetype i = 0; i < rects.size(); ++i) {
