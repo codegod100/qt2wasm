@@ -228,6 +228,8 @@ bool AppWindow::prefersDark() const
 {
     if (m_darkOverride)
         return m_dark;
+    if (const auto dark = Accent::instance()->dark())
+        return *dark;
     return QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
 }
 

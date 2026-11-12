@@ -18,6 +18,25 @@ const char kPath[] = "/org/freedesktop/portal/desktop";
 const char kIface[] = "org.freedesktop.portal.Settings";
 const char kNs[] = "org.freedesktop.appearance";
 const char kKey[] = "accent-color";
+const char kSchemeKey[] = "color-scheme";
+
+QVariant unwrap(const QVariant &v)
+{
+    QVariant inner = v;
+    while (inner.userType() == qMetaTypeId<QDBusVariant>())
+        inner = inner.value<QDBusVariant>().variant();
+    return inner;
+}
+
+// The portal's color-scheme is a uint: 1 prefer dark, 2 prefer light, 0 (or anything else) no preference.
+std::optional<bool> portalScheme(const QVariant &v)
+{
+    bool ok = false;
+    const uint s = unwrap(v).toUInt(&ok);
+    if (!ok || (s != 1 && s != 2))
+        return std::nullopt;
+    return s == 1;
+}
 
 // The portal's accent-color is (ddd), sRGB in [0, 1]; out of range: unset.
 QColor portalColor(const QVariant &v)
@@ -64,9 +83,9 @@ Accent::Accent()
     if (!env.isEmpty()) {
         m_override = true;
         m_color = env == "none" ? QColor() : QColor(QString::fromLatin1(env));
-        return;
     }
     m_portal = fromPortal(&m_portalAnswered);
+    m_portalDark = schemeFromPortal();
     QDBusConnection::sessionBus().connect(QString(), QLatin1String(kPath), QLatin1String(kIface),
                                           QStringLiteral("SettingChanged"), this,
                                           SLOT(portalChanged(QString, QString, QDBusVariant)));
@@ -94,13 +113,28 @@ QColor Accent::fromPortal(bool *answered) const
     return c;
 }
 
-QColor Accent::fromKdeglobals() const
+std::optional<bool> Accent::schemeFromPortal() const
 {
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    if (!bus.isConnected())
+        return std::nullopt;
+    QDBusMessage m = QDBusMessage::createMethodCall(QLatin1String(kService), QLatin1String(kPath),
+                                                    QLatin1String(kIface), QStringLiteral("ReadOne"));
+    m << QLatin1String(kNs) << QLatin1String(kSchemeKey);
+    const QDBusMessage r = bus.call(m, QDBus::Block, 1000);
+    if (r.type() != QDBusMessage::ReplyMessage || r.arguments().isEmpty())
+        return std::nullopt;
+    return portalScheme(r.arguments().first());
+}
+
+QColor Accent::fromKdeglobals(std::optional<bool> *dark) const
+{
+    *dark = std::nullopt;
     QFile f(m_kdeglobals);
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
         return {};
     QString group;
-    QColor accent, selection;
+    QColor accent, selection, window;
     QTextStream in(&f);
     while (!in.atEnd()) {
         const QString line = in.readLine().trimmed();
@@ -116,7 +150,11 @@ QColor Accent::fromKdeglobals() const
             accent = rgbList(value);
         else if (group == QLatin1String("Colors:Selection") && key == QLatin1String("BackgroundNormal"))
             selection = rgbList(value);
+        else if (group == QLatin1String("Colors:Window") && key == QLatin1String("BackgroundNormal"))
+            window = rgbList(value);
     }
+    if (window.isValid())
+        *dark = window.lightness() < 128;
     return accent.isValid() ? accent : selection;
 }
 
@@ -134,7 +172,14 @@ void Accent::watchKdeglobals()
 
 void Accent::portalChanged(const QString &ns, const QString &key, const QDBusVariant &value)
 {
-    if (ns != QLatin1String(kNs) || key != QLatin1String(kKey))
+    if (ns != QLatin1String(kNs))
+        return;
+    if (key == QLatin1String(kSchemeKey)) {
+        m_portalDark = portalScheme(QVariant::fromValue(value));
+        reload();
+        return;
+    }
+    if (key != QLatin1String(kKey))
         return;
     m_portal = portalColor(QVariant::fromValue(value));
     m_portalAnswered = m_portal.isValid();
@@ -143,11 +188,13 @@ void Accent::portalChanged(const QString &ns, const QString &key, const QDBusVar
 
 void Accent::reload()
 {
-    if (m_override)
-        return;
-    const QColor c = m_portalAnswered ? m_portal : fromKdeglobals();
-    if (c == m_color)
+    std::optional<bool> kdeDark;
+    const QColor kde = fromKdeglobals(&kdeDark);
+    const std::optional<bool> dark = m_portalDark ? m_portalDark : kdeDark;
+    const QColor c = m_override ? m_color : m_portalAnswered ? m_portal : kde;
+    if (c == m_color && dark == m_dark)
         return;
     m_color = c;
+    m_dark = dark;
     Q_EMIT changed();
 }

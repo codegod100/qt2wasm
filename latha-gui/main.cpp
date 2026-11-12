@@ -109,6 +109,8 @@ int cbPrefersDark(void *u)
     const QByteArray theme = qgetenv("LATHA_GUI_THEME");
     if (theme == "dark" || theme == "light")
         return theme == "dark";
+    if (const auto dark = Accent::instance()->dark())
+        return *dark;
     return QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
 }
 int cbAccentColor(void *, uint32_t *rgb)

@@ -11,7 +11,13 @@
 //      (Plasma 6, GNOME 47+, ...), followed through SettingChanged;
 //   3. KDE's kdeglobals: [General] AccentColor, else the selection color
 //      ([Colors:Selection] BackgroundNormal), followed with a file watcher.
+//
+// Light or dark (host.prefers-dark) comes the same way, for the same reason: conda Qt's QStyleHints::colorScheme
+// is often Unknown on KDE. The portal's org.freedesktop.appearance color-scheme (1 dark, 2 light, 0 no preference),
+// else kdeglobals' [Colors:Window] BackgroundNormal (dark when its lightness is under half); neither: Qt's answer.
 #pragma once
+
+#include <optional>
 
 #include <QColor>
 #include <QDBusVariant>
@@ -25,6 +31,8 @@ public:
     static Accent *instance();
     /** Invalid when the desktop has no accent color. */
     QColor color() const { return m_color; }
+    /** Whether the desktop is dark, if it says. */
+    std::optional<bool> dark() const { return m_dark; }
 
 Q_SIGNALS:
     void changed();
@@ -36,11 +44,14 @@ private:
     Accent();
     void reload();
     QColor fromPortal(bool *answered) const;
-    QColor fromKdeglobals() const;
+    QColor fromKdeglobals(std::optional<bool> *dark) const;
+    std::optional<bool> schemeFromPortal() const;
     void watchKdeglobals();
 
     QColor m_color;
     QColor m_portal;
+    std::optional<bool> m_dark;
+    std::optional<bool> m_portalDark;
     bool m_portalAnswered = false;
     bool m_override = false;
     QString m_kdeglobals;
