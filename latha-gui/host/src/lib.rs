@@ -697,6 +697,7 @@ impl LathaApp {
             return None;
         }
         let guest = self.bindings.latha_gui_app() as *const wapp::Guest;
+        procs::clear_upper_vector_state();
         // SAFETY: `guest` lives in self.bindings, which `f` cannot reach.
         match f(unsafe { &*guest }, &mut self.store) {
             Ok(r) => Some(r),

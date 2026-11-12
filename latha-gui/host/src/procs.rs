@@ -223,6 +223,24 @@ pub fn capture_memories<R>(f: impl FnOnce() -> R) -> (R, Vec<Arc<MemInfo>>) {
     (r, made)
 }
 
+/// Puts the upper halves of this thread's AVX registers back in their clean state (`vzeroupper`).
+///
+/// Cranelift's x86 code mixes VEX (AVX) and legacy SSE encodings. While the upper halves of the YMM registers are
+/// dirty (some native code ran 256-bit AVX and did not end with `vzeroupper`; glibc's AVX-512 string functions
+/// never clean up after themselves), every legacy SSE instruction pays a penalty: Skia's blur in webby.wasm ran
+/// 45x slower (110 ms -> 5 s a frame) for the first half minute after launch, until something happened to clean
+/// the state. Calling this before guest code runs keeps it clean; it costs about a cycle.
+#[inline]
+pub fn clear_upper_vector_state() {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if std::arch::is_x86_feature_detected!("avx") {
+            // SAFETY: vzeroupper only zeroes bits 128 and up of YMM0-15, which no Rust code keeps live across here.
+            unsafe { std::arch::asm!("vzeroupper", options(nomem, nostack, preserves_flags)) };
+        }
+    }
+}
+
 /// Linear memories as one mmap reservation each (never moving), as wasmtime's
 /// own are; only so that the host knows their base addresses.
 struct HostMemories;
@@ -506,6 +524,8 @@ impl Runtime {
     fn arm_kill<T>(store: &mut Store<T>, kill: Arc<AtomicBool>) {
         store.set_epoch_deadline(1);
         store.epoch_deadline_callback(move |_| {
+            // Every 10 ms of guest code: keep the vector state clean (see clear_upper_vector_state).
+            clear_upper_vector_state();
             if kill.load(Ordering::Relaxed) {
                 Err(wasmtime::Error::new(Killed))
             } else {

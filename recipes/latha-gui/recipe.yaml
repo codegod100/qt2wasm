@@ -6,7 +6,7 @@
 #
 #   rattler-build build -r recipes/latha-gui -c conda-forge -c https://prefix.dev/nandi-testing
 context:
-  version: "0.8.0"
+  version: "0.8.1"
 
 package:
   name: latha-gui
