@@ -33,14 +33,20 @@ installing a newer APK).
 
 ## Which app
 
-Open a latha:gui `.wasm` file with latha (a file manager's "Open with", a
-downloaded file, or "Share" to latha): it is copied to
+On first start (when no `app.wasm` has been chosen yet and latha was not opened
+with a file), latha opens the Android system file picker (`ACTION_OPEN_DOCUMENT`)
+so you can pick any `.wasm` file from your device (cancelling falls back to the
+bundled `assets/app.wasm` sketch example). A quick **four-finger tap** opens the
+file picker at any time to switch to a different `.wasm` app (and tapping the
+dark red error screen reopens it).
+
+You can also open a latha:gui `.wasm` file directly with latha (a file
+manager's "Open with", a downloaded file, or "Share" to latha): it is copied to
 `/sdcard/Android/data/uk.nandi.latha/files/app.wasm` and runs, and stays the
 app for later starts until another file replaces it. latha checks the wasm
 magic first (file managers often label `.wasm` as `application/octet-stream`,
 so latha is offered for those too), and a file that is not wasm gives the dark
-red screen. Android only hands the file over at a cold start: if latha is
-already running, leave it with Back first.
+red screen.
 
 Otherwise `/sdcard/Android/data/uk.nandi.latha/files/app.wasm` if it is there
 (`adb push my-app.wasm /sdcard/Android/data/uk.nandi.latha/files/app.wasm`),

@@ -1,25 +1,26 @@
 // SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only
 //
-// latha-android: a latha:gui runner for Android. One NativeActivity, no Java
-// and no Qt: the app (a latha:gui component, qt2wasm/gui/wit/gui.wit) runs on
-// wasmtime through latha-host (../latha-gui/host, the same host latha-gui
-// uses) and we are its window: we copy the frames it paints into the
-// activity's ANativeWindow, turn touches into mouse events, and keys (hardware
-// or soft keyboard) into key events, with dead-key compositions as
-// `app.text`.
+// latha-android: a latha:gui runner for Android. One NativeActivity subclass
+// (LathaActivity, for the system file picker) with no Qt: the app (a latha:gui
+// component, qt2wasm/gui/wit/gui.wit) runs on wasmtime through latha-host
+// (../latha-gui/host, the same host latha-gui uses) and we are its window: we
+// copy the frames it paints into the activity's ANativeWindow, turn touches
+// into mouse events, and keys (hardware or soft keyboard) into key events, with
+// dead-key compositions as `app.text`.
 //
 // Everything runs on android_main's thread, like latha-gui's Qt thread: the
 // host's imports are callbacks into `Shared` below, and the loop (`pump`)
 // mirrors latha-gui's window.cpp: tick when due, paint at most every 16 ms.
 //
 // Which app: a wasm file latha was opened with ("Open with" / "Share", see
-// `opened_file`) is copied to `<external files dir>/app.wasm` and so becomes
-// the app from then on; `<external files dir>/app.wasm` if it exists (adb push
-// it to /sdcard/Android/data/uk.nandi.latha/files/app.wasm), else the APK's
-// assets/app.wasm. assets/app.args (one per line, optional) are its args;
-// the first is its name. An app that names its update manifest (latha:app
-// version= and update=, ../latha-gui/host/src/update.rs) gets newer builds
-// into files/updates, and the newest copy runs.
+// `opened_file`) or picked from the Android file picker (`ACTION_OPEN_DOCUMENT`)
+// is copied to `<external files dir>/app.wasm` and becomes the app from then on;
+// if none is present yet, the file picker opens on start (cancelling falls back
+// to assets/app.wasm). A four-finger tap opens the file picker at any time to
+// switch apps. assets/app.args (one per line, optional) are its args; the
+// first is its name. An app that names its update manifest (latha:app version=
+// and update=, ../latha-gui/host/src/update.rs) gets newer builds into
+// files/updates, and the newest copy runs.
 
 use android_activity::input::{
     InputEvent, KeyAction, KeyEvent, KeyMapChar, Keycode, MetaState, MotionAction, MotionEvent,
@@ -39,10 +40,14 @@ use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 const MIN_FRAME: Duration = Duration::from_millis(16);
 const CURSOR_TEXT: u32 = 1; // types.cursor: default, text, ...
+
+static PICK_WAKER: OnceLock<AndroidAppWaker> = OnceLock::new();
+static PICK_RESULT: Mutex<Option<Option<String>>> = Mutex::new(None);
 
 // --- the host's imports ------------------------------------------------------------
 
@@ -212,6 +217,8 @@ struct Runner {
     buttons: u32,
     /// when a third finger came down (a quick three-finger tap toggles the keyboard)
     three: Option<Instant>,
+    /// when a fourth finger came down (a quick four-finger tap opens the wasm file picker)
+    four: Option<Instant>,
     /// where the first finger came down; the press is held back until it moves
     /// past the touch slop or lifts, so a second finger arriving first (scroll,
     /// three-finger tap) leaves no mark
@@ -219,6 +226,8 @@ struct Runner {
     kbd: bool,
     // keys
     accent: Option<char>,
+    picking: bool,
+    load_failed: bool,
     exit: bool,
 }
 
@@ -297,12 +306,62 @@ impl Runner {
         unsafe { std::slice::from_raw_parts_mut(p, stride * h) }.fill(rgbx);
     }
 
-    fn load(&mut self) -> Result<(), String> {
+    fn picked_wasm_path(&self, files: &Path) -> PathBuf {
+        self.android
+            .external_data_path()
+            .map(|e| e.join("app.wasm"))
+            .unwrap_or_else(|| files.join("picked.wasm"))
+    }
+
+    fn unload(&mut self) {
+        if !self.app.is_null() {
+            unsafe { latha_host::latha_free(self.app) };
+            self.app = std::ptr::null_mut();
+        }
+        self.dead = false;
+        self.load_failed = false;
+        self.applied = (0, 0, 0.0);
+        self.frame.clear();
+        self.fw = 0;
+        self.fh = 0;
+        self.blit_wanted = false;
+        self.tick_now = false;
+        self.shared.frame_wanted.set(false);
+        self.shared.tick_at.set(None);
+        self.shared.cursor.set(0);
+        self.shared.quit.set(None);
+        self.shared.woken.store(false, Ordering::Release);
+    }
+
+    fn start_picker(&mut self) -> bool {
+        if self.picking {
+            return true;
+        }
+        if let Ok(mut slot) = PICK_RESULT.lock() {
+            *slot = None;
+        }
+        match open_file_picker(&self.android) {
+            Ok(()) => {
+                self.picking = true;
+                true
+            }
+            Err(e) => {
+                log::error!("cannot open file picker: {e}");
+                false
+            }
+        }
+    }
+
+    /// Returns Ok(true) if an app was loaded, Ok(false) if no user app is
+    /// present yet (when allow_asset is false).
+    fn load(&mut self, allow_asset: bool) -> Result<bool, String> {
         let files = self.android.internal_data_path().ok_or("no internal data path")?;
         let cache = files.join("cache");
         std::env::set_var("LATHA_GUI_CACHE_DIR", &cache);
         std::env::set_var("HOME", "/data");
-        let (given, args) = self.find_app(&files)?;
+        let Some((given, args)) = self.find_app(&files, allow_asset)? else {
+            return Ok(false);
+        };
         // A newer downloaded build of the app (latha-host update.rs) runs instead; the update check below looks
         // for the next one.
         let store = files.join("updates");
@@ -325,6 +384,7 @@ impl Runner {
         }
         log::info!("loaded in {:?}", t.elapsed());
         self.app = app;
+        self.load_failed = false;
         let (mut w, mut h) = (0u32, 0u32);
         let mut err: *mut c_char = std::ptr::null_mut();
         match unsafe { latha_start(app, a.as_ptr(), a.len(), &mut w, &mut h, &mut err) } {
@@ -345,10 +405,10 @@ impl Runner {
             Ok(c) => log::info!("update check: {c:?}"),
             Err(e) => log::warn!("update check: {e:#}"),
         });
-        Ok(())
+        Ok(true)
     }
 
-    fn find_app(&self, files: &Path) -> Result<(PathBuf, Vec<String>), String> {
+    fn find_app(&self, files: &Path, allow_asset: bool) -> Result<Option<(PathBuf, Vec<String>)>, String> {
         let am = self.android.asset_manager();
         let read_asset = |name: &CStr| -> Option<Vec<u8>> {
             let mut a = am.open(name)?;
@@ -359,16 +419,20 @@ impl Runner {
         let mut args: Vec<String> = read_asset(c"app.args")
             .map(|b| String::from_utf8_lossy(&b).lines().map(str::to_owned).filter(|l| !l.is_empty()).collect())
             .unwrap_or_default();
-        if let Some(ext) = self.android.external_data_path() {
-            let p = ext.join("app.wasm");
-            match opened_file(&self.android, &p) {
-                Ok(true) => log::info!("opened with a wasm file: now {}", p.display()),
-                Ok(false) => {}
-                Err(e) => return Err(format!("the file latha was opened with: {e}")),
-            }
-            if p.is_file() {
-                return Ok((p, vec!["app".into()]));
-            }
+        let p = self.picked_wasm_path(files);
+        if let Some(parent) = p.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        match opened_file(&self.android, &p) {
+            Ok(true) => log::info!("opened with a wasm file: now {}", p.display()),
+            Ok(false) => {}
+            Err(e) => return Err(format!("the file latha was opened with: {e}")),
+        }
+        if p.is_file() {
+            return Ok(Some((p, vec!["app".into()])));
+        }
+        if !allow_asset {
+            return Ok(None);
         }
         let bytes = read_asset(c"app.wasm").ok_or("no app: the APK has no assets/app.wasm")?;
         let p = files.join("app.wasm");
@@ -378,7 +442,7 @@ impl Runner {
         if args.is_empty() {
             args.push("app".into());
         }
-        Ok((p, args))
+        Ok(Some((p, args)))
     }
 
     // --- frames ---
@@ -568,7 +632,9 @@ impl Runner {
                     self.primary = None;
                 }
                 self.two_finger = Some(centroid(ev));
-                if ev.pointer_count() >= 3 && self.three.is_none() {
+                if ev.pointer_count() >= 4 && self.four.is_none() {
+                    self.four = Some(Instant::now());
+                } else if ev.pointer_count() >= 3 && self.three.is_none() {
                     self.three = Some(Instant::now());
                 }
             }
@@ -597,6 +663,13 @@ impl Runner {
                 }
             }
             MotionAction::Up | MotionAction::Cancel => {
+                // a quick four-finger tap opens the wasm file picker
+                if let Some(t) = self.four.take() {
+                    if ev.action() == MotionAction::Up && t.elapsed() < Duration::from_millis(500) {
+                        self.three = None;
+                        self.start_picker();
+                    }
+                }
                 // a quick three-finger tap toggles the soft keyboard in any app
                 if let Some(t) = self.three.take() {
                     if ev.action() == MotionAction::Up && t.elapsed() < Duration::from_millis(500) {
@@ -605,7 +678,10 @@ impl Runner {
                 }
                 if let Some(id) = self.primary.take() {
                     let p = ev.pointers().find(|p| p.pointer_id() == id).unwrap_or(ev.pointer_at_index(idx));
-                    if ev.action() == MotionAction::Up {
+                    if ev.action() == MotionAction::Up && self.load_failed {
+                        self.pending = None;
+                        self.start_picker();
+                    } else if ev.action() == MotionAction::Up {
                         self.press_pending(); // a tap: press now, release below
                     } else {
                         self.pending = None; // cancelled before it pressed
@@ -911,16 +987,79 @@ fn special_keysym(k: Keycode) -> u32 {
     }
 }
 
-// --- "Open with" -------------------------------------------------------------------
+// --- "Open with" and file picker ---------------------------------------------------
+
+fn copy_uri_to_wasm(
+    env: &mut jni::JNIEnv,
+    act: &jni::objects::JObject,
+    uri: &jni::objects::JObject,
+    dest: &Path,
+) -> jni::errors::Result<Option<String>> {
+    use jni::objects::JValue;
+    let shown = env.call_method(uri, "toString", "()Ljava/lang/String;", &[])?.l()?;
+    let shown: String = env.get_string(&jni::objects::JString::from(shown))?.into();
+    if let Some(parent) = dest.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let resolver = env.call_method(act, "getContentResolver", "()Landroid/content/ContentResolver;", &[])?.l()?;
+    let input = env
+        .call_method(&resolver, "openInputStream", "(Landroid/net/Uri;)Ljava/io/InputStream;", &[JValue::Object(uri)])?
+        .l()?;
+    if input.is_null() {
+        return Ok(Some(format!("cannot open {shown}")));
+    }
+    // Copy beside dest, check, then rename over it.
+    let tmp = dest.with_extension("wasm.part");
+    let mut out = match std::fs::File::create(&tmp) {
+        Ok(f) => f,
+        Err(e) => return Ok(Some(format!("{}: {e}", tmp.display()))),
+    };
+    let jbuf = env.new_byte_array(1 << 20)?;
+    let mut buf = vec![0i8; 1 << 20];
+    let mut head = Vec::new();
+    let mut total = 0usize;
+    let mut io_err = None;
+    loop {
+        let n = env.call_method(&input, "read", "([B)I", &[JValue::Object(&jbuf)])?.i()?;
+        if n < 0 {
+            break;
+        }
+        let n = n as usize;
+        env.get_byte_array_region(&jbuf, 0, &mut buf[..n])?;
+        let bytes = unsafe { std::slice::from_raw_parts(buf.as_ptr() as *const u8, n) };
+        if head.len() < 8 {
+            head.extend_from_slice(&bytes[..n.min(8 - head.len())]);
+        }
+        if let Err(e) = std::io::Write::write_all(&mut out, bytes) {
+            io_err = Some(e);
+            break;
+        }
+        total += n;
+    }
+    env.call_method(&input, "close", "()V", &[])?;
+    drop(out);
+    let err = if let Some(e) = io_err {
+        Some(format!("{}: {e}", tmp.display()))
+    } else if !head.starts_with(b"\0asm") {
+        Some(format!("{shown} is not a wasm file"))
+    } else {
+        std::fs::rename(&tmp, dest).err().map(|e| format!("{}: {e}", dest.display()))
+    };
+    let _ = std::fs::remove_file(&tmp);
+    match err {
+        Some(e) => Ok(Some(e)),
+        None => {
+            log::info!("copied {total} bytes from {shown}");
+            Ok(Some(String::new()))
+        }
+    }
+}
 
 /// If the activity was started with a file (ACTION_VIEW's data, or
 /// ACTION_SEND's EXTRA_STREAM), copy it to `dest` through the ContentResolver
 /// (content:// and file:// alike) and say so. Not a wasm module (no `\0asm`
 /// magic): an error, and `dest` is left as it was. The intent is then cleared,
 /// so a recreated activity does not copy it again.
-///
-/// NativeActivity has no onNewIntent, so this is only seen at a cold start: a
-/// latha already running keeps its app (leave it with Back, then open again).
 fn opened_file(android: &AndroidApp, dest: &Path) -> Result<bool, String> {
     use jni::objects::{JObject, JString, JValue};
     let vm = unsafe { jni::JavaVM::from_raw(android.vm_as_ptr() as *mut jni::sys::JavaVM) }.map_err(|e| e.to_string())?;
@@ -945,61 +1084,12 @@ fn opened_file(android: &AndroidApp, dest: &Path) -> Result<bool, String> {
         if uri.is_null() {
             return Ok(None);
         }
-        let shown = env.call_method(&uri, "toString", "()Ljava/lang/String;", &[])?.l()?;
-        let shown: String = env.get_string(&JString::from(shown))?.into();
-        log::info!("opened with {action} {shown}");
-        let resolver = env.call_method(&act, "getContentResolver", "()Landroid/content/ContentResolver;", &[])?.l()?;
-        let input = env
-            .call_method(&resolver, "openInputStream", "(Landroid/net/Uri;)Ljava/io/InputStream;", &[JValue::Object(&uri)])?
-            .l()?;
-        // Copy beside dest, check, then rename over it.
-        let tmp = dest.with_extension("wasm.part");
-        let mut out = match std::fs::File::create(&tmp) {
-            Ok(f) => f,
-            Err(e) => return Ok(Some(format!("{}: {e}", tmp.display()))),
-        };
-        let jbuf = env.new_byte_array(1 << 20)?;
-        let mut buf = vec![0i8; 1 << 20];
-        let mut head = Vec::new();
-        let mut total = 0usize;
-        let mut io_err = None;
-        loop {
-            let n = env.call_method(&input, "read", "([B)I", &[JValue::Object(&jbuf)])?.i()?;
-            if n < 0 {
-                break;
-            }
-            let n = n as usize;
-            env.get_byte_array_region(&jbuf, 0, &mut buf[..n])?;
-            let bytes = unsafe { std::slice::from_raw_parts(buf.as_ptr() as *const u8, n) };
-            if head.len() < 8 {
-                head.extend_from_slice(&bytes[..n.min(8 - head.len())]);
-            }
-            if let Err(e) = std::io::Write::write_all(&mut out, bytes) {
-                io_err = Some(e);
-                break;
-            }
-            total += n;
-        }
-        env.call_method(&input, "close", "()V", &[])?;
+        log::info!("opened with {action}");
+        let res = copy_uri_to_wasm(&mut env, &act, &uri, dest)?;
         // Seen: don't copy it again if the activity is recreated.
         let empty = env.new_object("android/content/Intent", "()V", &[])?;
         env.call_method(&act, "setIntent", "(Landroid/content/Intent;)V", &[JValue::Object(&empty)])?;
-        drop(out);
-        let err = if let Some(e) = io_err {
-            Some(format!("{}: {e}", tmp.display()))
-        } else if !head.starts_with(b"\0asm") {
-            Some(format!("{shown} is not a wasm file"))
-        } else {
-            std::fs::rename(&tmp, dest).err().map(|e| format!("{}: {e}", dest.display()))
-        };
-        let _ = std::fs::remove_file(&tmp);
-        match err {
-            Some(e) => Ok(Some(e)),
-            None => {
-                log::info!("copied {total} bytes");
-                Ok(Some(String::new()))
-            }
-        }
+        Ok(res)
     })();
     match r {
         Ok(None) => Ok(false),
@@ -1015,11 +1105,75 @@ fn opened_file(android: &AndroidApp, dest: &Path) -> Result<bool, String> {
     }
 }
 
+fn copy_picked_uri(android: &AndroidApp, uri_str: &str, dest: &Path) -> Result<(), String> {
+    use jni::objects::{JObject, JValue};
+    let vm = unsafe { jni::JavaVM::from_raw(android.vm_as_ptr() as *mut jni::sys::JavaVM) }.map_err(|e| e.to_string())?;
+    let mut env = vm.attach_current_thread().map_err(|e| e.to_string())?;
+    let act = unsafe { JObject::from_raw(android.activity_as_ptr() as jni::sys::jobject) };
+    let r = (|| -> jni::errors::Result<Option<String>> {
+        let jstr = env.new_string(uri_str)?;
+        let uri = env
+            .call_static_method("android/net/Uri", "parse", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&jstr)])?
+            .l()?;
+        if uri.is_null() {
+            return Ok(Some(format!("invalid URI: {uri_str}")));
+        }
+        copy_uri_to_wasm(&mut env, &act, &uri, dest)
+    })();
+    match r {
+        Ok(Some(e)) if e.is_empty() => Ok(()),
+        Ok(Some(e)) => Err(e),
+        Ok(None) => Err("no file selected".into()),
+        Err(e) => {
+            if env.exception_check().unwrap_or(false) {
+                let _ = env.exception_describe();
+                let _ = env.exception_clear();
+            }
+            Err(format!("JNI: {e}"))
+        }
+    }
+}
+
+fn open_file_picker(android: &AndroidApp) -> Result<(), String> {
+    use jni::objects::JObject;
+    let vm = unsafe { jni::JavaVM::from_raw(android.vm_as_ptr() as *mut jni::sys::JavaVM) }.map_err(|e| e.to_string())?;
+    let mut env = vm.attach_current_thread().map_err(|e| e.to_string())?;
+    let act = unsafe { JObject::from_raw(android.activity_as_ptr() as jni::sys::jobject) };
+    if let Err(e) = env.call_method(&act, "pickWasmFile", "()V", &[]) {
+        if env.exception_check().unwrap_or(false) {
+            let _ = env.exception_describe();
+            let _ = env.exception_clear();
+        }
+        return Err(format!("JNI pickWasmFile: {e}"));
+    }
+    Ok(())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_uk_nandi_latha_LathaActivity_nativeOnPickResult(
+    mut env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    uri: jni::objects::JString,
+) {
+    let val = if uri.is_null() {
+        None
+    } else {
+        env.get_string(&uri).ok().map(String::from)
+    };
+    if let Ok(mut slot) = PICK_RESULT.lock() {
+        *slot = Some(val);
+    }
+    if let Some(w) = PICK_WAKER.get() {
+        w.wake();
+    }
+}
+
 #[no_mangle]
 fn android_main(android: AndroidApp) {
     android_logger::init_once(
         android_logger::Config::default().with_max_level(log::LevelFilter::Info).with_tag("latha"),
     );
+    let _ = PICK_WAKER.set(android.create_waker());
     android.set_window_flags(WindowManagerFlags::KEEP_SCREEN_ON, WindowManagerFlags::empty());
     let shared = Box::new(Shared {
         frame_wanted: Cell::new(false),
@@ -1051,9 +1205,12 @@ fn android_main(android: AndroidApp) {
         clicks: 0,
         buttons: 0,
         three: None,
+        four: None,
         pending: None,
         kbd: false,
         accent: None,
+        picking: false,
+        load_failed: false,
         exit: false,
     };
     let mut tried = false;
@@ -1104,9 +1261,68 @@ fn android_main(android: AndroidApp) {
         if !tried && r.window.is_some() {
             tried = true;
             r.fill(0xff30_3030);
-            if let Err(e) = r.load() {
-                log::error!("cannot run the app: {e}");
-                r.fill(0xff20_20a0); // red: see `adb logcat -s latha`
+            match r.load(false) {
+                Ok(true) => {}
+                Ok(false) => {
+                    if !r.start_picker() {
+                        if let Err(e) = r.load(true) {
+                            log::error!("cannot run the app: {e}");
+                            r.load_failed = true;
+                            r.fill(0xff20_20a0);
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::error!("cannot run the app: {e}");
+                    r.load_failed = true;
+                    r.fill(0xff20_20a0); // red: see `adb logcat -s latha`
+                }
+            }
+        }
+        if r.picking && r.window.is_some() {
+            let picked = PICK_RESULT.lock().ok().and_then(|mut s| s.take());
+            if let Some(res) = picked {
+                r.picking = false;
+                match res {
+                    Some(uri_str) => {
+                        let dest = android
+                            .internal_data_path()
+                            .map(|f| r.picked_wasm_path(&f));
+                        let copy_res = match dest {
+                            Some(d) => copy_picked_uri(&android, &uri_str, &d),
+                            None => Err("no internal data path".into()),
+                        };
+                        match copy_res {
+                            Ok(()) => {
+                                r.unload();
+                                r.fill(0xff30_3030);
+                                if let Err(e) = r.load(false) {
+                                    log::error!("cannot run picked app: {e}");
+                                    r.load_failed = true;
+                                    r.fill(0xff20_20a0);
+                                }
+                            }
+                            Err(e) => {
+                                log::error!("picked file: {e}");
+                                r.unload();
+                                r.load_failed = true;
+                                r.fill(0xff20_20a0);
+                            }
+                        }
+                    }
+                    None => {
+                        if r.app.is_null() {
+                            r.fill(0xff30_3030);
+                            if let Err(e) = r.load(true) {
+                                log::error!("cannot run fallback app: {e}");
+                                r.load_failed = true;
+                                r.fill(0xff20_20a0);
+                            }
+                        } else {
+                            r.blit_wanted = true;
+                        }
+                    }
+                }
             }
         }
         if let (Some(f), true) = (focus, r.live()) {
@@ -1139,8 +1355,5 @@ fn android_main(android: AndroidApp) {
         }
         r.pump();
     }
-    if !r.app.is_null() {
-        unsafe { latha_host::latha_free(r.app) };
-        r.app = std::ptr::null_mut();
-    }
+    r.unload();
 }

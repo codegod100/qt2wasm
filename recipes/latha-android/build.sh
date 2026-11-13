@@ -44,6 +44,28 @@ export CARGO_APK_RELEASE_KEYSTORE=$work/latha.keystore CARGO_APK_RELEASE_KEYSTOR
 cd latha-android
 cargo apk build --release
 apk=target/release/apk/latha.apk
+
+# Compile LathaActivity.java into classes.dex, inject into the APK, align and re-sign.
+mkdir -p "$work/java" "$work/dex"
+javac --release 11 -classpath "$ANDROID_HOME/platforms/android-35/android.jar" \
+    -d "$work/java" java/uk/nandi/latha/LathaActivity.java
+"$ANDROID_HOME/build-tools/35.0.0/d8" --min-api 30 --output "$work/dex" \
+    $(find "$work/java" -name '*.class')
+python3 - "$apk" "$work/dex/classes.dex" "$work/latha-unaligned.apk" <<'PY'
+import sys, zipfile
+src, dex, dst = sys.argv[1], sys.argv[2], sys.argv[3]
+with zipfile.ZipFile(src, "r") as zin, zipfile.ZipFile(dst, "w") as zout:
+    for info in zin.infolist():
+        if info.filename.startswith("META-INF/") or info.filename == "classes.dex":
+            continue
+        zout.writestr(info, zin.read(info.filename))
+    zout.write(dex, "classes.dex", compress_type=zipfile.ZIP_DEFLATED)
+PY
+"$ANDROID_HOME/build-tools/35.0.0/zipalign" -f -p 4 "$work/latha-unaligned.apk" "$work/latha-aligned.apk"
+"$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
+    --ks "$work/latha.keystore" --ks-pass pass:android --key-pass pass:android --ks-key-alias latha \
+    --out "$apk" "$work/latha-aligned.apk"
+
 ls -la "$apk"
 install -Dm644 "$apk" "$PREFIX/share/latha-android/latha.apk"
 install -Dm644 assets/app.wasm "$PREFIX/share/latha-android/app.wasm"

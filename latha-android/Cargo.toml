@@ -1,6 +1,6 @@
 [package]
 name = "latha-android"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 license = "LGPL-2.1-only OR LGPL-3.0-only"
 publish = false
@@ -24,7 +24,7 @@ lto = "thin"
 codegen-units = 16
 strip = true
 
-# cargo-apk (ci/android.sh): one NativeActivity, no Java.
+# cargo-apk (ci/android.sh): NativeActivity subclass LathaActivity for the file picker.
 [package.metadata.android]
 package = "uk.nandi.latha"
 apk_name = "latha"
@@ -44,6 +44,7 @@ theme = "@style/LathaTheme"
 extract_native_libs = true
 
 [package.metadata.android.application.activity]
+name = "uk.nandi.latha.LathaActivity"
 config_changes = "orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
 launch_mode = "singleTask"
 orientation = "unspecified"
